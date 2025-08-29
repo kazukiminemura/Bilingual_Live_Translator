@@ -11,6 +11,35 @@ described in the [requirement definition](Requirment_Definition.md).
   `transformers`).
 - Color coded console output (blue/green for original text, magenta/cyan for translation).
 
+## Prerequisites
+These steps ensure your microphone and audio libraries are properly configured.
+
+- **Install PulseAudio Volume Control** to confirm that your microphone is detected:
+
+  ```bash
+  sudo apt-get install pavucontrol
+  ```
+
+- **Install PortAudio libraries** required by the `sounddevice` Python package:
+
+  ```bash
+  sudo apt-get install -y libportaudio2 libportaudiocpp0 portaudio19-dev
+  ```
+
+- **Install the Python `sounddevice` module** and verify available audio devices:
+
+  ```bash
+  pip install sounddevice
+
+  python - <<'PY'
+  import sounddevice as sd
+  print(sd.query_devices())
+  print("Default input device:", sd.default.device)
+  PY
+  ```
+
+If any of these commands fail, check your network configuration or proxy settings.
+
 ## Usage
 Install dependencies (requires internet access):
 ```bash
