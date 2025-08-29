@@ -67,18 +67,20 @@ class BilingualLiveTranslator:
         tuple[str, str]
             Transcribed text and detected language
         """
-        if not os.path.exists(audio_path):
+        # Normalize path for cross-platform compatibility
+        audio_path = Path(audio_path).expanduser().resolve()
+        if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
+
         print(f"🎵 Transcribing audio: {audio_path}")
         
         if language:
             lang = language[:2]
-            result = self.whisper_model.transcribe(audio_path, language=lang)
+            result = self.whisper_model.transcribe(str(audio_path), language=lang)
             detected_lang = lang
         else:
             # Auto-detect language
-            result = self.whisper_model.transcribe(audio_path)
+            result = self.whisper_model.transcribe(str(audio_path))
             detected_lang = result["language"]
         
         text = result["text"].strip()
@@ -180,12 +182,13 @@ def color_print(pair: TranslationPair, source: str, target: str) -> None:
 
 def validate_audio_file(audio_path: str) -> None:
     """Validate audio file exists and has supported extension."""
-    if not os.path.exists(audio_path):
+    path = Path(audio_path).expanduser().resolve()
+    if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
-    
+
     supported_extensions = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.mp4', '.avi', '.mov'}
-    file_ext = Path(audio_path).suffix.lower()
-    
+    file_ext = path.suffix.lower()
+
     if file_ext not in supported_extensions:
         print(f"⚠️  Warning: {file_ext} might not be supported. "
               f"Supported formats: {', '.join(supported_extensions)}")
