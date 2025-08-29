@@ -1,9 +1,10 @@
 # Use a CPU‑only build of PyTorch to avoid requiring CUDA / cuDNN.
 # The default wheels on PyPI are CPU‑only, so pin to a recent stable version.
-torch==2.3.1
+torch==2.8.0
 colorama
 transformers
 sentencepiece
 openai-whisper
+faster_whisper
 sounddevice
 numpy
