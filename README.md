@@ -1,11 +1,11 @@
 # Bilingual Live Translator
 
-This prototype demonstrates a simple bilingual speech translator that uses **OpenVINO**
-for both speech recognition and machine translation.  It follows the features
-described in the [requirement definition](Requirment_Definition.md).
+This prototype demonstrates a simple bilingual speech translator that uses **NeMo**
+and **OpenVINO** for inference.  It follows the features described in the
+[requirement definition](Requirment_Definition.md).
 
 ## Features
-- Speech-to-text using Whisper converted for OpenVINO.
+- Speech-to-text using the QuartzNet 15x5 model from NVIDIA NeMo (English only).
 - English ⇄ Japanese translation with MarianMT models accelerated by OpenVINO.
 - Color coded console output (blue/green for original text, magenta/cyan for translation).
 
@@ -20,9 +20,9 @@ Translate text:
 python app.py --text "Hello" --source en --target ja
 ```
 
-Transcribe and translate an audio file:
+Transcribe and translate an English audio file:
 ```bash
-python app.py --audio path/to/audio.wav --source ja --target en
+python app.py --audio path/to/audio.wav --source en --target ja
 ```
 
 Both commands print the original and translated text with colors for easy distinction.

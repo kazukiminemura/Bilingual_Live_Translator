@@ -1,15 +1,14 @@
 import argparse
 from dataclasses import dataclass
-from typing import Tuple
 
 from colorama import Fore, Style
 
 try:
-    from openvino_whisper import WhisperModel
+    from nemo.collections.asr.models import ASRModel
     from optimum.intel import OVModelForSeq2SeqLM
     from transformers import AutoTokenizer
-except ImportError:
-    WhisperModel = OVModelForSeq2SeqLM = AutoTokenizer = None  # type: ignore
+except ImportError:  # pragma: no cover - handled during runtime
+    ASRModel = OVModelForSeq2SeqLM = AutoTokenizer = None  # type: ignore
 
 
 @dataclass
@@ -19,13 +18,15 @@ class TranslationPair:
 
 
 class BilingualLiveTranslator:
-    """Simple bilingual translator using OpenVINO for inference."""
+    """Simple bilingual translator using NeMo and OpenVINO for inference."""
 
-    def __init__(self, device: str = "CPU"):
-        if WhisperModel is None or OVModelForSeq2SeqLM is None:
+    def __init__(self, device: str = "cpu"):
+        if ASRModel is None or OVModelForSeq2SeqLM is None:
             raise RuntimeError("Required packages are not installed. See requirements.txt")
-        # Load Whisper for speech recognition
-        self.whisper = WhisperModel("tiny", device=device)
+        # Load QuartzNet for speech recognition (English only)
+        self.asr_model = ASRModel.from_pretrained(model_name="QuartzNet15x5Base-En")
+        if device.lower() != "cpu":
+            self.asr_model.to(device)
         # Load translation models
         self.en_ja_tok = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-ja")
         self.en_ja_model = OVModelForSeq2SeqLM.from_pretrained("Helsinki-NLP/opus-mt-en-ja")
@@ -33,17 +34,19 @@ class BilingualLiveTranslator:
         self.ja_en_model = OVModelForSeq2SeqLM.from_pretrained("Helsinki-NLP/opus-mt-ja-en")
 
     def transcribe(self, audio_path: str, language: str) -> str:
-        """Transcribe audio using Whisper.
+        """Transcribe audio using QuartzNet.
 
         Parameters
         ----------
         audio_path: str
             Path to audio file.
         language: str
-            Source language code ("en" or "ja").
+            Source language code. Only English ("en") is supported.
         """
-        result = self.whisper.transcribe(audio_path, language=language)
-        return result["text"].strip()
+        if not language.startswith("en"):
+            raise ValueError("QuartzNet15x5Base-En only supports English audio")
+        transcript = self.asr_model.transcribe(paths2audio_files=[audio_path])[0]
+        return transcript.strip()
 
     def translate_text(self, text: str, source: str, target: str) -> str:
         """Translate text between English and Japanese."""
