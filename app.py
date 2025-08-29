@@ -3,10 +3,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from colorama import Fore, Style, init
-import whisper
-from transformers import pipeline
 import warnings
 import logging
+import tempfile
+import wave
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
@@ -39,6 +39,9 @@ class BilingualLiveTranslator:
         """
         logger.debug("Initializing translator with Whisper model size: %s", whisper_model_size)
 
+        from transformers import pipeline
+        import whisper
+
         print(f"🔄 Loading Whisper model ({whisper_model_size})...")
         self.whisper_model = whisper.load_model(whisper_model_size)
 
@@ -50,7 +53,7 @@ class BilingualLiveTranslator:
                 device=-1  # Use CPU
             ),
             ("ja", "en"): pipeline(
-                "translation", 
+                "translation",
                 model="Helsinki-NLP/opus-mt-jap-en",
                 device=-1  # Use CPU
             ),
@@ -230,6 +233,26 @@ def validate_audio_file(audio_path: str) -> None:
         print(f"⚠️  Warning: {file_ext} might not be supported. "
               f"Supported formats: {', '.join(supported_extensions)}")
 
+
+def record_audio(duration: int = 5, sample_rate: int = 16000) -> str:
+    """Record audio from the system microphone and save to a temp file."""
+    import sounddevice as sd
+    import numpy as np
+    print(f"🎙️  Recording for {duration} seconds...")
+    recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate,
+                       channels=1, dtype="float32")
+    sd.wait()
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    scaled = np.int16(recording * 32767)
+    with wave.open(tmp.name, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(scaled.tobytes())
+    print(f"💾 Recorded audio saved to {tmp.name}")
+    return tmp.name
+
 def main() -> None:
     """Main function with enhanced argument parsing and error handling."""
     # Initialize colorama for Windows compatibility
@@ -258,6 +281,8 @@ Examples:
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--audio", help="Path to input audio file")
     input_group.add_argument("--text", help="Translate given text instead of audio")
+    input_group.add_argument("--mic", action="store_true",
+                             help="Record audio from microphone")
     
     # Language options
     parser.add_argument("--source", default=None, 
@@ -266,6 +291,10 @@ Examples:
                        help="Target language code (en/ja). Auto-determine if not specified")
     parser.add_argument("--auto", action="store_true",
                        help="Auto-detect source language and determine target")
+
+    # Recording options
+    parser.add_argument("--duration", type=int, default=5,
+                       help="Recording duration in seconds for --mic")
     
     # Model options
     parser.add_argument("--whisper-model", default="base",
@@ -286,18 +315,22 @@ Examples:
         format="[%(levelname)s] %(message)s"
     )
     logger.debug("Debug logging is enabled")
-    
+    temp_audio = None
     try:
+        if args.mic:
+            temp_audio = record_audio(args.duration)
+            args.audio = temp_audio
+
         # Initialize translator
         if not args.quiet:
             print(f"{Fore.CYAN}🚀 Starting Bilingual Live Translator{Style.RESET_ALL}")
-        
+
         translator = BilingualLiveTranslator(args.whisper_model)
-        
+
         # Process input
         if args.audio:
             validate_audio_file(args.audio)
-            
+
             if args.auto or (args.source is None):
                 # Auto-detect mode
                 pair = translator.process_audio(args.audio, None, args.target)
@@ -308,29 +341,29 @@ Examples:
                 pair = translator.process_audio(args.audio, args.source, args.target)
                 detected_source = args.source or pair.language_detected
                 final_target = args.target or ("ja" if detected_source == "en" else "en")
-                
+
         else:  # Text translation
             if args.source is None or args.target is None:
                 parser.error("Both --source and --target must be specified for text translation")
-            
+
             translation = translator.translate_text(args.text, args.source, args.target)
             pair = TranslationPair(args.text, translation)
             detected_source = args.source
             final_target = args.target
-        
+
         # Display results
         if not args.quiet:
             color_print(pair, detected_source, final_target)
         else:
             print(pair.translation)
-        
+
         # Save to file if requested
         if args.output:
             with open(args.output, "w", encoding="utf-8") as f:
                 f.write(f"Original ({detected_source}): {pair.text}\n")
                 f.write(f"Translation ({final_target}): {pair.translation}\n")
             print(f"💾 Saved to: {args.output}")
-            
+
     except FileNotFoundError as e:
         print(f"{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
     except ValueError as e:
@@ -338,6 +371,9 @@ Examples:
     except Exception as e:
         print(f"{Fore.RED}❌ Unexpected error: {e}{Style.RESET_ALL}")
         raise
+    finally:
+        if temp_audio and os.path.exists(temp_audio):
+            os.remove(temp_audio)
 
 if __name__ == "__main__":
     main()
