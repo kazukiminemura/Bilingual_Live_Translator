@@ -2,7 +2,7 @@ import argparse
 from dataclasses import dataclass
 
 from colorama import Fore, Style
-import speech_recognition as sr
+import whisper
 from transformers import pipeline
 
 
@@ -13,19 +13,19 @@ class TranslationPair:
 
 
 class BilingualLiveTranslator:
-    """Simple bilingual translator using Google Web Speech for transcription and
+    """Simple bilingual translator using Whisper for transcription and
     lightweight translation models for real-time conversion."""
 
     def __init__(self) -> None:
-        """Initialize recognizer and translation pipelines."""
-        self.recognizer = sr.Recognizer()
+        """Initialize Whisper model and translation pipelines."""
+        self.whisper_model = whisper.load_model("base")
         self.translators = {
             ("en", "ja"): pipeline("translation", model="Helsinki-NLP/opus-mt-en-ja"),
             ("ja", "en"): pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en"),
         }
 
     def transcribe(self, audio_path: str, language: str) -> str:
-        """Transcribe audio using the Google Web Speech API.
+        """Transcribe audio using OpenAI's Whisper model.
 
         Parameters
         ----------
@@ -34,10 +34,9 @@ class BilingualLiveTranslator:
         language: str
             Source language code (e.g., ``"en"`` or ``"ja"``).
         """
-        lang = "en-US" if language.startswith("en") else "ja-JP"
-        with sr.AudioFile(audio_path) as source:
-            audio = self.recognizer.record(source)
-        return self.recognizer.recognize_google(audio, language=lang)
+        lang = language[:2]
+        result = self.whisper_model.transcribe(audio_path, language=lang)
+        return result["text"].strip()
 
     def translate_text(self, text: str, source: str, target: str) -> str:
         """Translate text between languages using local translation models.
