@@ -6,9 +6,12 @@ from colorama import Fore, Style, init
 import whisper
 from transformers import pipeline
 import warnings
+import logging
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TranslationPair:
@@ -34,13 +37,15 @@ class BilingualLiveTranslator:
         whisper_model_size : str
             Whisper model size: tiny, base, small, medium, large
         """
+        logger.debug("Initializing translator with Whisper model size: %s", whisper_model_size)
+
         print(f"🔄 Loading Whisper model ({whisper_model_size})...")
         self.whisper_model = whisper.load_model(whisper_model_size)
-        
+
         print("🔄 Loading translation models...")
         self.translators = {
             ("en", "ja"): pipeline(
-                "translation", 
+                "translation",
                 model="Helsinki-NLP/opus-mt-en-jap",
                 device=-1  # Use CPU
             ),
@@ -51,6 +56,7 @@ class BilingualLiveTranslator:
             ),
         }
         print("✅ Models loaded successfully!")
+        logger.debug("Available translators: %s", list(self.translators.keys()))
 
     def transcribe(self, audio_path: str, language: str = None) -> tuple[str, str]:
         """Transcribe audio using OpenAI's Whisper model.
@@ -72,19 +78,23 @@ class BilingualLiveTranslator:
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
+        logger.debug("Starting transcription for %s", audio_path)
         print(f"🎵 Transcribing audio: {audio_path}")
         
         if language:
             lang = language[:2]
             result = self.whisper_model.transcribe(str(audio_path), language=lang)
             detected_lang = lang
+            logger.debug("Used specified language: %s", lang)
         else:
             # Auto-detect language
             result = self.whisper_model.transcribe(str(audio_path))
             detected_lang = result["language"]
-        
+            logger.debug("Auto-detected language: %s", detected_lang)
+
         text = result["text"].strip()
         print(f"🗣️  Detected language: {detected_lang}")
+        logger.debug("Transcription result: %s", text)
         
         return text, detected_lang
 
@@ -118,10 +128,13 @@ class BilingualLiveTranslator:
             supported_pairs = list(self.translators.keys())
             raise ValueError(f"Unsupported language pair: {source}→{target}. "
                            f"Supported pairs: {supported_pairs}")
-        
+
+        logger.debug("Translating text from %s to %s", source, target)
         print(f"🔄 Translating {source}→{target}...")
         result = translator(text)
-        return result[0]["translation_text"]
+        translated = result[0]["translation_text"]
+        logger.debug("Translation result: %s", translated)
+        return translated
 
     def process_audio(self, audio_path: str, source: str = None, target: str = None) -> TranslationPair:
         """Transcribe and translate an audio file.
@@ -140,6 +153,8 @@ class BilingualLiveTranslator:
         TranslationPair
             Original text and translation
         """
+        logger.debug("Processing audio file: %s", audio_path)
+
         # Transcribe audio
         original_text, detected_lang = self.transcribe(audio_path, source)
         
@@ -154,10 +169,14 @@ class BilingualLiveTranslator:
                 target = "en"
             else:
                 raise ValueError(f"Cannot auto-determine target for language: {detected_lang}")
+
+        logger.debug("Detected language: %s, target language: %s", detected_lang, target)
         
         # Translate
         translated_text = self.translate_text(original_text, detected_lang, target)
-        
+        logger.debug("Original text: %s", original_text)
+        logger.debug("Translated text: %s", translated_text)
+
         return TranslationPair(original_text, translated_text, detected_lang)
 
 def color_print(pair: TranslationPair, source: str, target: str) -> None:
@@ -237,10 +256,18 @@ Examples:
     
     # Output options
     parser.add_argument("--output", help="Save translation to file")
-    parser.add_argument("--quiet", "-q", action="store_true", 
+    parser.add_argument("--quiet", "-q", action="store_true",
                        help="Quiet mode - minimal output")
-    
+    parser.add_argument("--debug", action="store_true",
+                       help="Enable debug logging")
+
     args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format="[%(levelname)s] %(message)s"
+    )
+    logger.debug("Debug logging is enabled")
     
     try:
         # Initialize translator
