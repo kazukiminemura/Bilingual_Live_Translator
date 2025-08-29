@@ -1,5 +1,5 @@
+torch==2.8.0
 colorama
 transformers
-torch
 sentencepiece
 openai-whisper
