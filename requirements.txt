@@ -1,0 +1,7 @@
+openvino>=2023.0
+openvino-whisper
+optimum[openvino]
+transformers
+soundfile
+sounddevice
+colorama
