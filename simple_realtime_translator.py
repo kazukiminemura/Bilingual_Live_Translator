@@ -5,10 +5,11 @@ from faster_whisper import WhisperModel
 from transformers import pipeline
 
 # Whisperモデル (小さめ: "tiny", "small", "medium" など選択可)
-asr_model = WhisperModel("small", device="cpu")  # GPUがあれば "cuda"
+asr_model = WhisperModel("medium", device="cpu")  # GPUがあれば "cuda"
 
 # 翻訳モデル (英語→日本語)
-translator = pipeline("translation", model="Helsinki-NLP/opus-mt-en-ja")
+#translator = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap")
+translator = pipeline("translation", model="Helsinki-NLP/opus-mt-jap-en")
 
 # 音声設定
 SAMPLE_RATE = 16000
