@@ -1,90 +1,295 @@
 import argparse
+import os
 from dataclasses import dataclass
-
-from colorama import Fore, Style
+from pathlib import Path
+from colorama import Fore, Style, init
 import whisper
 from transformers import pipeline
+import warnings
 
+# Suppress warnings for cleaner output
+warnings.filterwarnings("ignore")
 
 @dataclass
 class TranslationPair:
+    """データクラス for storing original text and translation"""
     text: str
     translation: str
-
+    language_detected: str = ""
 
 class BilingualLiveTranslator:
     """Simple bilingual translator using Whisper for transcription and
-    lightweight translation models for real-time conversion."""
-
-    def __init__(self) -> None:
-        """Initialize Whisper model and translation pipelines."""
-        self.whisper_model = whisper.load_model("base")
-        self.translators = {
-            ("en", "ja"): pipeline("translation", model="Helsinki-NLP/opus-mt-en-ja"),
-            ("ja", "en"): pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en"),
-        }
-
-    def transcribe(self, audio_path: str, language: str) -> str:
-        """Transcribe audio using OpenAI's Whisper model.
-
+    lightweight translation models for real-time conversion.
+    
+    Supports:
+    - English speech → Japanese subtitles
+    - Japanese speech → English text
+    """
+    
+    def __init__(self, whisper_model_size: str = "base") -> None:
+        """Initialize Whisper model and translation pipelines.
+        
         Parameters
         ----------
-        audio_path: str
-            Path to audio file.
-        language: str
-            Source language code (e.g., ``"en"`` or ``"ja"``).
+        whisper_model_size : str
+            Whisper model size: tiny, base, small, medium, large
         """
-        lang = language[:2]
-        result = self.whisper_model.transcribe(audio_path, language=lang)
-        return result["text"].strip()
+        print(f"🔄 Loading Whisper model ({whisper_model_size})...")
+        self.whisper_model = whisper.load_model(whisper_model_size)
+        
+        print("🔄 Loading translation models...")
+        self.translators = {
+            ("en", "ja"): pipeline(
+                "translation", 
+                model="Helsinki-NLP/opus-mt-en-jap",
+                device=-1  # Use CPU
+            ),
+            ("ja", "en"): pipeline(
+                "translation", 
+                model="Helsinki-NLP/opus-mt-jap-en",
+                device=-1  # Use CPU
+            ),
+        }
+        print("✅ Models loaded successfully!")
+
+    def transcribe(self, audio_path: str, language: str = None) -> tuple[str, str]:
+        """Transcribe audio using OpenAI's Whisper model.
+        
+        Parameters
+        ----------
+        audio_path : str
+            Path to audio file
+        language : str, optional
+            Source language code. If None, auto-detect
+            
+        Returns
+        -------
+        tuple[str, str]
+            Transcribed text and detected language
+        """
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            
+        print(f"🎵 Transcribing audio: {audio_path}")
+        
+        if language:
+            lang = language[:2]
+            result = self.whisper_model.transcribe(audio_path, language=lang)
+            detected_lang = lang
+        else:
+            # Auto-detect language
+            result = self.whisper_model.transcribe(audio_path)
+            detected_lang = result["language"]
+        
+        text = result["text"].strip()
+        print(f"🗣️  Detected language: {detected_lang}")
+        
+        return text, detected_lang
 
     def translate_text(self, text: str, source: str, target: str) -> str:
         """Translate text between languages using local translation models.
-
-        Currently supports English⇄Japanese via Helsinki-NLP's opus-mt models.
+        
+        Currently supports:
+        - English ⇄ Japanese via Helsinki-NLP's opus-mt models
+        
+        Parameters
+        ----------
+        text : str
+            Text to translate
+        source : str
+            Source language code
+        target : str
+            Target language code
+            
+        Returns
+        -------
+        str
+            Translated text
         """
+        if not text.strip():
+            return ""
+            
         key = (source[:2], target[:2])
         translator = self.translators.get(key)
+        
         if translator is None:
-            raise ValueError("Unsupported language pair")
-        return translator(text)[0]["translation_text"]
+            supported_pairs = list(self.translators.keys())
+            raise ValueError(f"Unsupported language pair: {source}→{target}. "
+                           f"Supported pairs: {supported_pairs}")
+        
+        print(f"🔄 Translating {source}→{target}...")
+        result = translator(text)
+        return result[0]["translation_text"]
 
-    def process_audio(self, audio_path: str, source: str, target: str) -> TranslationPair:
-        """Transcribe and translate an audio file."""
-        original = self.transcribe(audio_path, source)
-        translated = self.translate_text(original, source, target)
-        return TranslationPair(original, translated)
-
+    def process_audio(self, audio_path: str, source: str = None, target: str = None) -> TranslationPair:
+        """Transcribe and translate an audio file.
+        
+        Parameters
+        ----------
+        audio_path : str
+            Path to audio file
+        source : str, optional
+            Source language. If None, auto-detect
+        target : str, optional
+            Target language. If None, auto-determine based on detected source
+            
+        Returns
+        -------
+        TranslationPair
+            Original text and translation
+        """
+        # Transcribe audio
+        original_text, detected_lang = self.transcribe(audio_path, source)
+        
+        if not original_text:
+            return TranslationPair("", "", detected_lang)
+        
+        # Auto-determine target language if not specified
+        if target is None:
+            if detected_lang == "en":
+                target = "ja"
+            elif detected_lang == "ja":
+                target = "en"
+            else:
+                raise ValueError(f"Cannot auto-determine target for language: {detected_lang}")
+        
+        # Translate
+        translated_text = self.translate_text(original_text, detected_lang, target)
+        
+        return TranslationPair(original_text, translated_text, detected_lang)
 
 def color_print(pair: TranslationPair, source: str, target: str) -> None:
-    """Print original and translation with color coding."""
-    src_color = Fore.BLUE if source.startswith("en") else Fore.GREEN
-    tgt_color = Fore.MAGENTA if target.startswith("ja") else Fore.CYAN
+    """Print original and translation with color coding and formatting."""
+    print("\n" + "="*60)
+    
+    # Source text
+    src_color = Fore.CYAN if source.startswith("en") else Fore.GREEN
+    src_label = "🇺🇸 English" if source.startswith("en") else "🇯🇵 Japanese"
+    print(f"{src_color}【{src_label}】{Style.RESET_ALL}")
     print(f"{src_color}{pair.text}{Style.RESET_ALL}")
+    
+    print()
+    
+    # Translation
+    tgt_color = Fore.MAGENTA if target.startswith("ja") else Fore.YELLOW
+    tgt_label = "🇯🇵 Japanese" if target.startswith("ja") else "🇺🇸 English"
+    print(f"{tgt_color}【{tgt_label}】{Style.RESET_ALL}")
     print(f"{tgt_color}{pair.translation}{Style.RESET_ALL}")
+    
+    print("="*60)
 
+def validate_audio_file(audio_path: str) -> None:
+    """Validate audio file exists and has supported extension."""
+    if not os.path.exists(audio_path):
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+    
+    supported_extensions = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.mp4', '.avi', '.mov'}
+    file_ext = Path(audio_path).suffix.lower()
+    
+    if file_ext not in supported_extensions:
+        print(f"⚠️  Warning: {file_ext} might not be supported. "
+              f"Supported formats: {', '.join(supported_extensions)}")
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Bilingual Live Translator")
-    parser.add_argument("--audio", help="Path to input audio file")
-    parser.add_argument("--text", help="Translate given text instead of audio")
-    parser.add_argument("--source", default="en", help="Source language code")
-    parser.add_argument("--target", default="ja", help="Target language code")
+    """Main function with enhanced argument parsing and error handling."""
+    # Initialize colorama for Windows compatibility
+    init()
+    
+    parser = argparse.ArgumentParser(
+        description="🎯 Bilingual Live Translator - English ⇄ Japanese",
+        epilog="""
+Examples:
+  # English speech → Japanese subtitles
+  python translator.py --audio english_speech.wav
+  
+  # Japanese speech → English text  
+  python translator.py --audio japanese_speech.wav
+  
+  # Text translation
+  python translator.py --text "Hello world" --source en --target ja
+  
+  # Auto-detect language from audio
+  python translator.py --audio mixed_language.wav --auto
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    # Input options
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("--audio", help="Path to input audio file")
+    input_group.add_argument("--text", help="Translate given text instead of audio")
+    
+    # Language options
+    parser.add_argument("--source", default=None, 
+                       help="Source language code (en/ja). Auto-detect if not specified")
+    parser.add_argument("--target", default=None,
+                       help="Target language code (en/ja). Auto-determine if not specified")
+    parser.add_argument("--auto", action="store_true",
+                       help="Auto-detect source language and determine target")
+    
+    # Model options
+    parser.add_argument("--whisper-model", default="base",
+                       choices=["tiny", "base", "small", "medium", "large"],
+                       help="Whisper model size (default: base)")
+    
+    # Output options
+    parser.add_argument("--output", help="Save translation to file")
+    parser.add_argument("--quiet", "-q", action="store_true", 
+                       help="Quiet mode - minimal output")
+    
     args = parser.parse_args()
-
-    if args.audio is None and args.text is None:
-        parser.error("Either --audio or --text must be provided")
-
-    translator = BilingualLiveTranslator()
-
-    if args.audio:
-        pair = translator.process_audio(args.audio, args.source, args.target)
-    else:
-        translation = translator.translate_text(args.text, args.source, args.target)
-        pair = TranslationPair(args.text, translation)
-
-    color_print(pair, args.source, args.target)
-
+    
+    try:
+        # Initialize translator
+        if not args.quiet:
+            print(f"{Fore.CYAN}🚀 Starting Bilingual Live Translator{Style.RESET_ALL}")
+        
+        translator = BilingualLiveTranslator(args.whisper_model)
+        
+        # Process input
+        if args.audio:
+            validate_audio_file(args.audio)
+            
+            if args.auto or (args.source is None):
+                # Auto-detect mode
+                pair = translator.process_audio(args.audio, None, args.target)
+                detected_source = pair.language_detected
+                final_target = args.target or ("ja" if detected_source == "en" else "en")
+            else:
+                # Manual language specification
+                pair = translator.process_audio(args.audio, args.source, args.target)
+                detected_source = args.source or pair.language_detected
+                final_target = args.target or ("ja" if detected_source == "en" else "en")
+                
+        else:  # Text translation
+            if args.source is None or args.target is None:
+                parser.error("Both --source and --target must be specified for text translation")
+            
+            translation = translator.translate_text(args.text, args.source, args.target)
+            pair = TranslationPair(args.text, translation)
+            detected_source = args.source
+            final_target = args.target
+        
+        # Display results
+        if not args.quiet:
+            color_print(pair, detected_source, final_target)
+        else:
+            print(pair.translation)
+        
+        # Save to file if requested
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(f"Original ({detected_source}): {pair.text}\n")
+                f.write(f"Translation ({final_target}): {pair.translation}\n")
+            print(f"💾 Saved to: {args.output}")
+            
+    except FileNotFoundError as e:
+        print(f"{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+    except ValueError as e:
+        print(f"{Fore.RED}❌ Error: {e}{Style.RESET_ALL}")
+    except Exception as e:
+        print(f"{Fore.RED}❌ Unexpected error: {e}{Style.RESET_ALL}")
+        raise
 
 if __name__ == "__main__":
     main()
