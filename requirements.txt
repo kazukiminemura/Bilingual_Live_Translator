@@ -1,5 +1,5 @@
-speechrecognition
 colorama
 transformers
 torch
 sentencepiece
+openai-whisper
