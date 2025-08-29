@@ -1,12 +1,14 @@
 # Bilingual Live Translator
 
-This prototype demonstrates a simple bilingual speech translator that relies on
-Google's free web APIs for both speech recognition and translation.  It follows
-the features described in the [requirement definition](Requirment_Definition.md).
+This prototype demonstrates a simple bilingual speech translator that uses the
+Google Web Speech API for speech recognition and lightweight translation models
+from the Helsinki-NLP project via `transformers`. It follows the features
+described in the [requirement definition](Requirment_Definition.md).
 
 ## Features
 - Speech-to-text using the Google Web Speech API.
-- English ⇄ Japanese translation with the Google Translate API.
+- English ⇄ Japanese translation with local Helsinki-NLP models (via
+  `transformers`).
 - Color coded console output (blue/green for original text, magenta/cyan for translation).
 
 ## Usage

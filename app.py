@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from colorama import Fore, Style
 import speech_recognition as sr
-from googletrans import Translator
+from transformers import pipeline
 
 
 @dataclass
@@ -13,12 +13,16 @@ class TranslationPair:
 
 
 class BilingualLiveTranslator:
-    """Simple bilingual translator using Google APIs for speech recognition and translation."""
+    """Simple bilingual translator using Google Web Speech for transcription and
+    lightweight translation models for real-time conversion."""
 
     def __init__(self) -> None:
-        """Initialize recognizer and translator instances."""
+        """Initialize recognizer and translation pipelines."""
         self.recognizer = sr.Recognizer()
-        self.translator = Translator()
+        self.translators = {
+            ("en", "ja"): pipeline("translation", model="Helsinki-NLP/opus-mt-en-ja"),
+            ("ja", "en"): pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en"),
+        }
 
     def transcribe(self, audio_path: str, language: str) -> str:
         """Transcribe audio using the Google Web Speech API.
@@ -36,9 +40,15 @@ class BilingualLiveTranslator:
         return self.recognizer.recognize_google(audio, language=lang)
 
     def translate_text(self, text: str, source: str, target: str) -> str:
-        """Translate text between languages using Google Translate."""
-        result = self.translator.translate(text, src=source, dest=target)
-        return result.text
+        """Translate text between languages using local translation models.
+
+        Currently supports English⇄Japanese via Helsinki-NLP's opus-mt models.
+        """
+        key = (source[:2], target[:2])
+        translator = self.translators.get(key)
+        if translator is None:
+            raise ValueError("Unsupported language pair")
+        return translator(text)[0]["translation_text"]
 
     def process_audio(self, audio_path: str, source: str, target: str) -> TranslationPair:
         """Transcribe and translate an audio file."""
