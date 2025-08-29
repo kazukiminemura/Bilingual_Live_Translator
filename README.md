@@ -25,6 +25,8 @@ python app.py --text "Hello" --source en --target ja
 Transcribe and translate an English audio file:
 ```bash
 python app.py --audio path/to/audio.wav --source en --target ja
+# Windows paths using backslashes also work
+# python app.py --audio .\\sample_english_audio.wav --source en --target ja
 ```
 
 Both commands print the original and translated text with colors for easy distinction.
