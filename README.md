@@ -64,3 +64,19 @@ python app.py --mic --duration 5
 ```
 
 Both commands print the original and translated text with colors for easy distinction.
+
+## Real-time word-by-word translation (experimental)
+An experimental helper class is provided for streaming translation from the
+microphone.  It splits incoming audio into short chunks, obtains
+word-level timestamps from Whisper and translates each word immediately.
+
+```bash
+python - <<'PY'
+from realtime_translator import RealTimeWordTranslator
+rt = RealTimeWordTranslator()
+rt.stream_from_mic()
+PY
+```
+
+Speak English or Japanese into the microphone and the console will emit the
+recognized word alongside its translation.
