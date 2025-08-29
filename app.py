@@ -131,8 +131,26 @@ class BilingualLiveTranslator:
 
         logger.debug("Translating text from %s to %s", source, target)
         print(f"🔄 Translating {source}→{target}...")
-        result = translator(text)
-        translated = result[0]["translation_text"]
+
+        tokenizer = translator.tokenizer
+        max_len = getattr(tokenizer, "model_max_length", 512)
+        tokens = tokenizer.encode(text, add_special_tokens=False)
+
+        translations = []
+        if len(tokens) > max_len:
+            logger.debug("Input exceeds max length (%d > %d). Splitting...", len(tokens), max_len)
+            start = 0
+            while start < len(tokens):
+                end = min(start + max_len, len(tokens))
+                chunk = tokenizer.decode(tokens[start:end], skip_special_tokens=True)
+                result = translator(chunk)
+                translations.append(result[0]["translation_text"])
+                start = end
+        else:
+            result = translator(text)
+            translations.append(result[0]["translation_text"])
+
+        translated = " ".join(translations)
         logger.debug("Translation result: %s", translated)
         return translated
 
