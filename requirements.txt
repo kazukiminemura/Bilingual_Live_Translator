@@ -1,7 +1,3 @@
-openvino>=2023.0
-optimum[openvino]
-transformers
-soundfile
-sounddevice
+speechrecognition
+googletrans==4.0.0-rc1
 colorama
-nemo_toolkit
