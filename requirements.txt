@@ -4,3 +4,4 @@ transformers
 sentencepiece
 openai-whisper
 sounddevice
+numpy
