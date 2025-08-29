@@ -3,3 +3,4 @@ colorama
 transformers
 sentencepiece
 openai-whisper
+sounddevice

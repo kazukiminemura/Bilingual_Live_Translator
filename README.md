@@ -29,4 +29,9 @@ python app.py --audio path/to/audio.wav --source en --target ja
 # python app.py --audio .\\sample_english_audio.wav --source en --target ja
 ```
 
+Record from the microphone and translate to English (speak Japanese):
+```bash
+python app.py --mic --duration 5
+```
+
 Both commands print the original and translated text with colors for easy distinction.
