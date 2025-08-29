@@ -46,6 +46,10 @@ Install dependencies (requires internet access):
 pip install -r requirements.txt
 ```
 
+The `requirements.txt` file pins a CPU-only build of PyTorch. This avoids
+errors such as `Unable to load any of libcudnn...` when CUDA libraries are not
+available on the system.
+
 Translate text:
 ```bash
 python app.py --text "Hello" --source en --target ja

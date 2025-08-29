@@ -9,7 +9,8 @@ asr_model = WhisperModel("medium", device="cpu")  # GPUがあれば "cuda"
 
 # 翻訳モデル (英語→日本語)
 #translator = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap")
-translator = pipeline("translation", model="Helsinki-NLP/opus-mt-jap-en")
+# Run translation on CPU to avoid loading GPU libraries when CUDA is unavailable.
+translator = pipeline("translation", model="Helsinki-NLP/opus-mt-jap-en", device=-1)
 
 # 音声設定
 SAMPLE_RATE = 16000
