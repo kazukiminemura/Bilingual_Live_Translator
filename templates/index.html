@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Translation Subtitles</title>
+  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #fff; text-align: center; margin-top: 50px; }
+    .subtitle { font-size: 1.5em; margin: 1em; }
+  </style>
+</head>
+<body>
+  <h1>🎙️ 多言語リアルタイム翻訳</h1>
+  <div class="subtitle" id="original"></div>
+  <div class="subtitle" id="translated"></div>
+
+  <script>
+    const socket = io();
+    socket.on('subtitle', data => {
+      document.getElementById('original').textContent = '🗣️ 発話: ' + data.original;
+      document.getElementById('translated').textContent = '🌐 翻訳: ' + data.translated;
+    });
+  </script>
+</body>
+</html>
