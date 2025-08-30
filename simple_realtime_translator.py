@@ -16,7 +16,12 @@ import wave
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 model = whisper.load_model("medium")
-translator = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en")
+# Prepare translation pipelines for both directions
+translator_ja_en = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en")
+translator_en_ja = pipeline("translation", model="Helsinki-NLP/opus-mt-en-ja")
+
+# Default translation direction (Japanese -> English)
+translation_direction = 'ja-en'
 
 # Audio config
 FS = 16000
@@ -44,7 +49,13 @@ def recognize_and_translate():
             wav_path = record_audio_to_file()
             result = model.transcribe(wav_path)
             original_text = result['text']
-            translation = translator(original_text)[0]['translation_text']
+
+            # Choose translation pipeline based on current direction
+            if translation_direction == 'ja-en':
+                translation = translator_ja_en(original_text)[0]['translation_text']
+            else:
+                translation = translator_en_ja(original_text)[0]['translation_text']
+
             print(f"[INFO] Original: {original_text} | Translated: {translation}")
             socketio.emit('subtitle', {'original': original_text, 'translated': translation})
             os.remove(wav_path)
@@ -59,6 +70,16 @@ def index():
 @socketio.on('connect')
 def on_connect():
     print("[INFO] Client connected")
+
+
+@socketio.on('set_direction')
+def on_set_direction(data):
+    """Update translation direction based on client selection."""
+    global translation_direction
+    direction = data.get('direction')
+    if direction in ('ja-en', 'en-ja'):
+        translation_direction = direction
+        print(f"[INFO] Translation direction set to {translation_direction}")
 
 if __name__ == '__main__':
     # Start background transcription thread

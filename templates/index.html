@@ -11,11 +11,26 @@
 </head>
 <body>
   <h1>🎙️ 多言語リアルタイム翻訳</h1>
+  <div>
+    <label for="direction">翻訳方向:</label>
+    <select id="direction">
+      <option value="ja-en">日本語 ➡ 英語</option>
+      <option value="en-ja">英語 ➡ 日本語</option>
+    </select>
+  </div>
   <div id="subtitles"></div>
 
   <script>
     const socket = io();
     const container = document.getElementById('subtitles');
+    const directionSelect = document.getElementById('direction');
+
+    // Notify server of initial direction and when changed
+    socket.emit('set_direction', { direction: directionSelect.value });
+    directionSelect.addEventListener('change', () => {
+      socket.emit('set_direction', { direction: directionSelect.value });
+    });
+
     socket.on('subtitle', data => {
       const original = document.createElement('div');
       original.className = 'subtitle';
