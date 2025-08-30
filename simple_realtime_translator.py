@@ -1,52 +1,67 @@
-import asyncio
+# Realtime Speech Translation Web App (Flask + WebSocket + Whisper + HuggingFace)
+
+import os
+import time
+import whisper
+import threading
 import sounddevice as sd
 import numpy as np
-from faster_whisper import WhisperModel
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit
 from transformers import pipeline
+import tempfile
+import wave
 
-# Whisperモデル (小さめ: "tiny", "small", "medium" など選択可)
-asr_model = WhisperModel("medium", device="cpu")  # GPUがあれば "cuda"
+# Initialize components
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
+model = whisper.load_model("medium")
+translator = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en")
 
-# 翻訳モデル (英語→日本語)
-#translator = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap")
-# Run translation on CPU to avoid loading GPU libraries when CUDA is unavailable.
-translator = pipeline("translation", model="Helsinki-NLP/opus-mt-jap-en", device=-1)
+# Audio config
+FS = 16000
+CHANNELS = 1
+RECORD_SECONDS = 3
 
-# 音声設定
-SAMPLE_RATE = 16000
-BLOCK_DURATION = 3  # 秒ごとに処理（短くすれば細かく翻訳される）
-BLOCK_SIZE = SAMPLE_RATE * BLOCK_DURATION
+def record_audio_to_file():
+    """Record from microphone and return temporary WAV file path."""
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    print("[INFO] Recording...")
+    audio = sd.rec(int(RECORD_SECONDS * FS), samplerate=FS, channels=CHANNELS, dtype='int16')
+    sd.wait()
+    with wave.open(tmp_file.name, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(2)
+        wf.setframerate(FS)
+        wf.writeframes(audio.tobytes())
+    print("[INFO] Recording saved to:", tmp_file.name)
+    return tmp_file.name
 
-def process_audio(audio_chunk: np.ndarray):
-    """1ブロック分の音声をテキスト化＋翻訳して表示"""
-    segments, _ = asr_model.transcribe(audio_chunk, beam_size=5)
-    text = " ".join([seg.text for seg in segments]).strip()
+def recognize_and_translate():
+    """Background thread: records, transcribes, translates, and emits results."""
+    while True:
+        try:
+            wav_path = record_audio_to_file()
+            result = model.transcribe(wav_path)
+            original_text = result['text']
+            translation = translator(original_text)[0]['translation_text']
+            print(f"[INFO] Original: {original_text} | Translated: {translation}")
+            socketio.emit('subtitle', {'original': original_text, 'translated': translation})
+            os.remove(wav_path)
+        except Exception as e:
+            print("[ERROR]", e)
+        time.sleep(1)
 
-    if text:
-        # 翻訳
-        translated = translator(text)[0]["translation_text"]
-        print(f"[音声] {text}")
-        print(f"[翻訳] {translated}")
-        print("-" * 40)
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-def audio_callback(indata, frames, time, status):
-    if status:
-        print("⚠️", status)
-    audio_chunk = np.copy(indata[:, 0])  # モノラルで取得
-    process_audio(audio_chunk)
+@socketio.on('connect')
+def on_connect():
+    print("[INFO] Client connected")
 
-async def main():
-    print("🎤 リアルタイム翻訳開始 (Ctrl+Cで終了)")
-    with sd.InputStream(callback=audio_callback,
-                        channels=1,
-                        samplerate=SAMPLE_RATE,
-                        blocksize=BLOCK_SIZE,
-                        dtype=np.float32):
-        while True:
-            await asyncio.sleep(0.1)
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n🛑 終了しました")
+if __name__ == '__main__':
+    # Start background transcription thread
+    threading.Thread(target=recognize_and_translate, daemon=True).start()
+    # Run Flask app
+    socketio.run(app, host='0.0.0.0', port=5000)
