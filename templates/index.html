@@ -11,14 +11,22 @@
 </head>
 <body>
   <h1>🎙️ 多言語リアルタイム翻訳</h1>
-  <div class="subtitle" id="original"></div>
-  <div class="subtitle" id="translated"></div>
+  <div id="subtitles"></div>
 
   <script>
     const socket = io();
+    const container = document.getElementById('subtitles');
     socket.on('subtitle', data => {
-      document.getElementById('original').textContent = '🗣️ 発話: ' + data.original;
-      document.getElementById('translated').textContent = '🌐 翻訳: ' + data.translated;
+      const original = document.createElement('div');
+      original.className = 'subtitle';
+      original.textContent = '🗣️ 発話: ' + data.original;
+
+      const translated = document.createElement('div');
+      translated.className = 'subtitle';
+      translated.textContent = '🌐 翻訳: ' + data.translated;
+
+      container.appendChild(original);
+      container.appendChild(translated);
     });
   </script>
 </body>
