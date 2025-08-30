@@ -7,28 +7,40 @@
   <style>
     body { font-family: sans-serif; background: #111; color: #fff; text-align: center; margin-top: 50px; }
     .subtitle { font-size: 1.5em; margin: 1em; }
+    #direction-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 0.5em 1em;
+      font-size: 1em;
+    }
   </style>
 </head>
 <body>
   <h1>🎙️ 多言語リアルタイム翻訳</h1>
-  <div>
-    <label for="direction">翻訳方向:</label>
-    <select id="direction">
-      <option value="ja-en">日本語 ➡ 英語</option>
-      <option value="en-ja">英語 ➡ 日本語</option>
-    </select>
-  </div>
+  <button id="direction-toggle">日本語 ➡ 英語</button>
   <div id="subtitles"></div>
 
   <script>
     const socket = io();
     const container = document.getElementById('subtitles');
-    const directionSelect = document.getElementById('direction');
+    const directionButton = document.getElementById('direction-toggle');
+    let direction = 'ja-en';
 
-    // Notify server of initial direction and when changed
-    socket.emit('set_direction', { direction: directionSelect.value });
-    directionSelect.addEventListener('change', () => {
-      socket.emit('set_direction', { direction: directionSelect.value });
+    function updateButton() {
+      directionButton.textContent = direction === 'ja-en'
+        ? '日本語 ➡ 英語'
+        : '英語 ➡ 日本語';
+    }
+
+    // Notify server of initial direction
+    socket.emit('set_direction', { direction });
+    updateButton();
+
+    directionButton.addEventListener('click', () => {
+      direction = direction === 'ja-en' ? 'en-ja' : 'ja-en';
+      updateButton();
+      socket.emit('set_direction', { direction });
     });
 
     socket.on('subtitle', data => {
