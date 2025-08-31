@@ -257,6 +257,11 @@
                     <label for="debugToggle">デバッグモード:</label>
                     <button id="debugToggle" onclick="toggleDebug()">ON</button>
                 </div>
+
+                <div class="control-group">
+                    <label for="perfToggle">統計表示:</label>
+                    <button id="perfToggle" onclick="togglePerformanceStats()">OFF</button>
+                </div>
             </div>
             
             <div class="status" id="status">
@@ -316,6 +321,7 @@
             peakAmplitudes: [],
             totalProcessed: 0
         };
+        let statsVisible = false;
 
         // Socket event handlers
         socket.on('connect', function() {
@@ -372,7 +378,9 @@
 
         function displaySubtitle(original, translated) {
             const subtitlesDiv = document.getElementById('subtitles');
-            subtitlesDiv.innerHTML = '';
+            if (subtitlesDiv.firstChild && subtitlesDiv.firstChild.tagName === 'P') {
+                subtitlesDiv.innerHTML = '';
+            }
             const subtitleItem = document.createElement('div');
             subtitleItem.className = 'subtitle-item';
 
@@ -384,6 +392,7 @@
             `;
 
             subtitlesDiv.appendChild(subtitleItem);
+            subtitlesDiv.scrollTop = subtitlesDiv.scrollHeight;
         }
 
         function addDebugEntry(message, detail, data, timestamp) {
@@ -445,26 +454,43 @@
             }
             
             performanceData.totalProcessed++;
-            
-            // Update display
-            document.getElementById('performanceStats').style.display = 'block';
-            
+            updatePerformanceDisplay();
+        }
+
+        function updatePerformanceDisplay() {
+            const statsDiv = document.getElementById('performanceStats');
+            if (!statsVisible) {
+                statsDiv.style.display = 'none';
+                return;
+            }
+            statsDiv.style.display = 'block';
+
             if (performanceData.transcriptionTimes.length > 0) {
                 const avgTranscription = performanceData.transcriptionTimes.reduce((a, b) => a + b, 0) / performanceData.transcriptionTimes.length;
                 document.getElementById('avgTranscriptionTime').textContent = avgTranscription.toFixed(2) + 's';
             }
-            
+
             if (performanceData.translationTimes.length > 0) {
                 const avgTranslation = performanceData.translationTimes.reduce((a, b) => a + b, 0) / performanceData.translationTimes.length;
                 document.getElementById('avgTranslationTime').textContent = avgTranslation.toFixed(2) + 's';
             }
-            
+
             if (performanceData.peakAmplitudes.length > 0) {
                 const avgPeak = performanceData.peakAmplitudes.reduce((a, b) => a + b, 0) / performanceData.peakAmplitudes.length;
                 document.getElementById('avgPeakAmplitude').textContent = avgPeak.toFixed(0);
             }
-            
+
             document.getElementById('totalProcessed').textContent = performanceData.totalProcessed;
+        }
+
+        function togglePerformanceStats() {
+            statsVisible = !statsVisible;
+            const button = document.getElementById('perfToggle');
+            button.textContent = statsVisible ? 'ON' : 'OFF';
+            button.style.background = statsVisible ?
+                'linear-gradient(45deg, #10b981, #059669)' :
+                'linear-gradient(45deg, #6b7280, #4b5563)';
+            updatePerformanceDisplay();
         }
 
         function toggleDebug() {
