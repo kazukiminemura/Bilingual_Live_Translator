@@ -41,7 +41,7 @@ CHANNELS = 1
 RECORD_SECONDS = 3
 
 # Silence detection threshold (peak amplitude)
-silence_threshold = 500
+silence_threshold = 100
 
 # Debug settings
 DEBUG_MODE = True
