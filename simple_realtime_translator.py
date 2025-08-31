@@ -161,12 +161,28 @@ def recognize_and_translate():
                 log_debug("Skipping empty transcription")
                 continue
 
-            high_no_speech_segments = [seg for seg in segments if seg.get("no_speech_prob", 0) > 0.6]
-            if len(high_no_speech_segments) == len(segments) and segments:
-                log_debug("Skipping high no-speech probability segments", {
-                    "total_segments": len(segments),
-                    "high_no_speech_segments": len(high_no_speech_segments)
-                })
+            high_no_speech_segments = [
+                seg for seg in segments if seg.get("no_speech_prob", 0) > 0.6
+            ]
+
+            # Whisper can assign high ``no_speech_prob`` values to very short
+            # recordings even when speech is present.  When ``RECORD_SECONDS`` is
+            # set to 1 this would cause valid speech to be skipped entirely.  To
+            # ensure subtitles are still produced for these short clips we only
+            # apply the "high no-speech" filter when the recording duration is
+            # long enough to make the probability reliable.
+            if (
+                RECORD_SECONDS > 1
+                and len(high_no_speech_segments) == len(segments)
+                and segments
+            ):
+                log_debug(
+                    "Skipping high no-speech probability segments",
+                    {
+                        "total_segments": len(segments),
+                        "high_no_speech_segments": len(high_no_speech_segments),
+                    },
+                )
                 continue
 
             # Choose translation pipeline based on current direction
