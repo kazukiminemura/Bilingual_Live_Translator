@@ -19,7 +19,7 @@
             max-width: 1200px;
             margin: 0 auto;
             display: grid;
-            grid-template-columns: 400px 1fr;
+            grid-template-columns: 1fr 400px;
             gap: 20px;
         }
 
@@ -29,7 +29,6 @@
             padding: 30px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(10px);
-            order: 2;
         }
 
         .debug-panel {
@@ -41,7 +40,6 @@
             font-size: 12px;
             max-height: 80vh;
             overflow-y: auto;
-            order: 1;
         }
         
         h1 {
@@ -374,20 +372,18 @@
 
         function displaySubtitle(original, translated) {
             const subtitlesDiv = document.getElementById('subtitles');
+            subtitlesDiv.innerHTML = '';
             const subtitleItem = document.createElement('div');
             subtitleItem.className = 'subtitle-item';
-            
+
             const timestamp = new Date().toLocaleTimeString();
             subtitleItem.innerHTML = `
                 <div style="font-size: 12px; color: #718096; margin-bottom: 5px;">${timestamp}</div>
                 <div class="original">${original}</div>
                 <div class="translated">${translated}</div>
             `;
-            
+
             subtitlesDiv.appendChild(subtitleItem);
-            
-            // Scroll to bottom
-            subtitlesDiv.scrollTop = subtitlesDiv.scrollHeight;
         }
 
         function addDebugEntry(message, detail, data, timestamp) {
@@ -474,11 +470,16 @@
         function toggleDebug() {
             debugEnabled = !debugEnabled;
             const button = document.getElementById('debugToggle');
+            const debugPanel = document.querySelector('.debug-panel');
+            const container = document.querySelector('.container');
             button.textContent = debugEnabled ? 'ON' : 'OFF';
-            button.style.background = debugEnabled ? 
-                'linear-gradient(45deg, #10b981, #059669)' : 
+            button.style.background = debugEnabled ?
+                'linear-gradient(45deg, #10b981, #059669)' :
                 'linear-gradient(45deg, #6b7280, #4b5563)';
-            
+
+            debugPanel.style.display = debugEnabled ? 'block' : 'none';
+            container.style.gridTemplateColumns = debugEnabled ? '1fr 400px' : '1fr';
+
             socket.emit('toggle_debug', {enabled: debugEnabled});
             addDebugEntry('設定変更', `デバッグモード: ${debugEnabled ? 'ON' : 'OFF'}`);
         }
