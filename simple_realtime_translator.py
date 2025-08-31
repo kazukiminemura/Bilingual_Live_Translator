@@ -44,8 +44,15 @@ connections: Set[WebSocket] = set()
 # Load Whisper model and translation pipelines.  Translation is executed on
 # CPU so that the application also works on machines without a GPU.
 model = whisper.load_model("medium")
-translator_ja_en = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en", device=0)
-translator_en_ja = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap", device=0)
+# Translation pipelines run on CPU to make the application portable across
+# environments without a GPU.  The English→Japanese model name was corrected
+# as well.
+translator_ja_en = pipeline(
+    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
+)
+translator_en_ja = pipeline(
+    "translation", model="Helsinki-NLP/opus-mt-en-ja", device=-1
+)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +81,15 @@ audio_queue: "queue.Queue[tuple[str, float]]" = queue.Queue(maxsize=5)
 # ---------------------------------------------------------------------------
 
 def broadcast(event: str, data: Dict) -> None:
-    """Broadcast an event with data to all connected clients."""
+    """Broadcast an event with data to all connected clients.
+
+    ``broadcast`` can be invoked from both asynchronous and synchronous
+    contexts.  When an event loop is already running (e.g. inside the
+    WebSocket handler) we schedule the coroutine on that loop.  Otherwise we
+    create a temporary loop via ``asyncio.run``.  This avoids the
+    ``RuntimeError: asyncio.run() cannot be called from a running event loop``
+    that occurred previously.
+    """
 
     async def _broadcast() -> None:
         for ws in list(connections):
@@ -84,9 +99,12 @@ def broadcast(event: str, data: Dict) -> None:
                 # Ignore failures for disconnected clients
                 pass
 
-    # ``asyncio.run`` is safe here because this function is only invoked from
-    # background threads.  Each call creates a short-lived event loop.
-    asyncio.run(_broadcast())
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(_broadcast())
+    else:
+        loop.create_task(_broadcast())
 
 
 def log_debug(message: str, data: Dict | None = None) -> None:
