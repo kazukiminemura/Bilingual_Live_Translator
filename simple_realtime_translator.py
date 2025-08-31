@@ -51,7 +51,7 @@ translator_ja_en = pipeline(
     "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
 )
 translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-ja", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
 )
 
 
@@ -65,7 +65,7 @@ translation_direction = "ja-en"
 # Audio configuration
 FS = 16000
 CHANNELS = 3
-RECORD_SECONDS = 1
+RECORD_SECONDS = 2
 
 # Silence detection threshold (peak amplitude)
 silence_threshold = 100
