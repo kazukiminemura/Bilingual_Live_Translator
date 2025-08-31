@@ -30,7 +30,7 @@ translator_ja_en = pipeline(
     "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
 )
 translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-ja", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
 )
 
 # Default translation direction (Japanese -> English)
