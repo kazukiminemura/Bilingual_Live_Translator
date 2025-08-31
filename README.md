@@ -69,6 +69,30 @@ python app.py --mic --duration 5
 
 Both commands print the original and translated text with colors for easy distinction.
 
+## FastAPI server
+A minimal web API built with FastAPI is provided in `fastapi_app.py`.
+
+Start the server:
+
+```bash
+uvicorn fastapi_app:app --reload
+```
+
+Translate an audio file by sending a multipart request:
+
+```bash
+curl -F "file=@sample_english_audio.wav" -F "source=en" -F "target=ja" \
+  http://localhost:8000/translate/audio
+```
+
+Translate plain text with JSON:
+
+```bash
+curl -X POST http://localhost:8000/translate/text \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Hello","source":"en","target":"ja"}'
+```
+
 ## Real-time word-by-word translation (experimental)
 An experimental helper class is provided for streaming translation from the
 microphone.  It splits incoming audio into short chunks, obtains
