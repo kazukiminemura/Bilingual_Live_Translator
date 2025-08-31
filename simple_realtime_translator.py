@@ -27,10 +27,10 @@ model = whisper.load_model("medium")
 # prevents translations from executing on CPU-only systems and results in no
 # subtitles being emitted.
 translator_ja_en = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=0
 )
 translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=0
 )
 
 # Default translation direction (Japanese -> English)
@@ -42,7 +42,7 @@ CHANNELS = 1
 RECORD_SECONDS = 3
 
 # Silence detection threshold (peak amplitude)
-silence_threshold = 100
+silence_threshold = 10
 
 # Debug settings
 DEBUG_MODE = True
