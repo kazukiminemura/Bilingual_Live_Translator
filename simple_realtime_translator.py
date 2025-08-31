@@ -17,8 +17,16 @@ app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 model = whisper.load_model("medium")
 # Prepare translation pipelines for both directions
-translator_ja_en = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en")
-translator_en_ja = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap")
+# Explicitly run translations on the CPU to avoid failures when no GPU is
+# available.  The pipeline defaults to ``device=0`` if CUDA is detected, which
+# prevents translations from executing on CPU-only systems and results in no
+# subtitles being emitted.
+translator_ja_en = pipeline(
+    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
+)
+translator_en_ja = pipeline(
+    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
+)
 
 # Default translation direction (Japanese -> English)
 translation_direction = 'ja-en'
