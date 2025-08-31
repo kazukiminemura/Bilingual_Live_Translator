@@ -13,6 +13,7 @@ from transformers import pipeline
 import tempfile
 import wave
 import json
+import queue
 from datetime import datetime
 
 # Initialize components
@@ -26,10 +27,10 @@ model = whisper.load_model("medium")
 # prevents translations from executing on CPU-only systems and results in no
 # subtitles being emitted.
 translator_ja_en = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-jap-en", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
 )
 translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-en-ja", device=-1
 )
 
 # Default translation direction (Japanese -> English)
@@ -46,6 +47,7 @@ silence_threshold = 100
 # Debug settings
 DEBUG_MODE = True
 debug_history = []  # Store debug information
+audio_queue = queue.Queue(maxsize=5)
 
 def log_debug(message, data=None):
     """Log debug information with timestamp."""
@@ -112,28 +114,33 @@ def record_audio_to_file():
     log_debug("Audio file saved", {"file_size": os.path.getsize(tmp_file.name)})
     return tmp_file.name, peak
 
-def recognize_and_translate():
-    """Background thread: records, transcribes, translates, and emits results."""
-    log_debug("Background recognition thread started")
-    
+def record_audio_loop():
+    """Background thread: records audio and queues it for processing."""
+    log_debug("Background recording thread started")
     while True:
+        wav_path, peak = record_audio_to_file()
+        if peak < silence_threshold:
+            log_debug("Skipping silent audio", {"peak": peak, "threshold": silence_threshold})
+            os.remove(wav_path)
+            continue
+        audio_queue.put((wav_path, peak))
+
+
+def recognize_and_translate():
+    """Background thread: transcribes, translates, and emits results from queued audio."""
+    log_debug("Background recognition thread started")
+
+    while True:
+        wav_path, peak = audio_queue.get()
         try:
-            wav_path, peak = record_audio_to_file()
-
-            # Skip processing when the recorded audio is effectively silent
-            if peak < silence_threshold:  # empirical threshold for background noise
-                log_debug("Skipping silent audio", {"peak": peak, "threshold": silence_threshold})
-                os.remove(wav_path)
-                continue
-
             log_debug("Starting transcription", {"whisper_model": "medium"})
             transcription_start = time.time()
             result = model.transcribe(wav_path)
             transcription_time = time.time() - transcription_start
-            
+
             original_text = result.get("text", "").strip()
             segments = result.get("segments", [])
-            
+
             # Log detailed transcription results
             log_debug("Transcription completed", {
                 "original_text": original_text,
@@ -150,21 +157,16 @@ def recognize_and_translate():
                 ]
             })
 
-            # Whisper may still output hallucinated text for silent segments.
-            # Check the no_speech_prob of each segment and ignore if all
-            # indicate silence or if the text itself is empty.
             if not original_text:
                 log_debug("Skipping empty transcription")
-                os.remove(wav_path)
                 continue
-                
+
             high_no_speech_segments = [seg for seg in segments if seg.get("no_speech_prob", 0) > 0.6]
             if len(high_no_speech_segments) == len(segments) and segments:
                 log_debug("Skipping high no-speech probability segments", {
                     "total_segments": len(segments),
                     "high_no_speech_segments": len(high_no_speech_segments)
                 })
-                os.remove(wav_path)
                 continue
 
             # Choose translation pipeline based on current direction
@@ -172,7 +174,7 @@ def recognize_and_translate():
                 "direction": translation_direction,
                 "input_text": original_text
             })
-            
+
             translation_start = time.time()
             if translation_direction == "ja-en":
                 translation_result = translator_ja_en(original_text)
@@ -181,18 +183,18 @@ def recognize_and_translate():
                 translation_result = translator_en_ja(original_text)
                 translation = translation_result[0]["translation_text"]
             translation_time = time.time() - translation_start
-            
+
             log_debug("Translation completed", {
                 "translated_text": translation,
                 "translation_time": f"{translation_time:.2f}s",
-                "translation_model": "Helsinki-NLP/opus-mt-jap-en" if translation_direction == "ja-en" else "Helsinki-NLP/opus-mt-en-jap"
+                "translation_model": "Helsinki-NLP/opus-mt-ja-en" if translation_direction == "ja-en" else "Helsinki-NLP/opus-mt-en-ja"
             })
 
             print(f"[INFO] Original: {original_text} | Translated: {translation}")
-            
+
             # Emit results with debug information
             socketio.emit("subtitle", {
-                "original": original_text, 
+                "original": original_text,
                 "translated": translation,
                 "debug": {
                     "peak_amplitude": peak,
@@ -203,16 +205,17 @@ def recognize_and_translate():
                     "direction": translation_direction
                 }
             })
-            
-            os.remove(wav_path)
+
             log_debug("Processing cycle completed successfully")
-            
+
         except Exception as e:
             error_msg = f"Error in recognition/translation: {str(e)}"
             log_debug("ERROR occurred", {"error": error_msg, "error_type": type(e).__name__})
             print(f"[ERROR] {error_msg}")
-            
-        time.sleep(1)
+        finally:
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
+            audio_queue.task_done()
 
 @app.route('/')
 def index():
@@ -277,7 +280,7 @@ def on_get_debug_history():
 if __name__ == '__main__':
     log_debug("Application starting", {
         "whisper_model": "medium",
-        "translation_models": ["Helsinki-NLP/opus-mt-jap-en", "Helsinki-NLP/opus-mt-en-jap"],
+        "translation_models": ["Helsinki-NLP/opus-mt-ja-en", "Helsinki-NLP/opus-mt-en-ja"],
         "default_direction": translation_direction,
         "audio_config": {
             "sample_rate": FS,
@@ -286,7 +289,8 @@ if __name__ == '__main__':
         }
     })
     
-    # Start background transcription thread
+    # Start background threads for recording and processing
+    threading.Thread(target=record_audio_loop, daemon=True).start()
     threading.Thread(target=recognize_and_translate, daemon=True).start()
     # Run Flask app
     socketio.run(app, host='0.0.0.0', port=5000)
