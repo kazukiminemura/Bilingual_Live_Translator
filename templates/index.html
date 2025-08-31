@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>音声翻訳アプリ（デバッグ機能付き）</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.js"></script>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -313,7 +312,7 @@
     </div>
 
     <script>
-        const socket = io();
+        const socket = new WebSocket(`ws${window.location.protocol === 'https:' ? 's' : ''}://${window.location.host}/ws`);
         let debugEnabled = true;
         let performanceData = {
             transcriptionTimes: [],
@@ -322,57 +321,82 @@
             totalProcessed: 0
         };
         let statsVisible = false;
+        let downloadPending = false;
 
-        // Socket event handlers
-        socket.on('connect', function() {
+        function sendEvent(event, data) {
+            socket.send(JSON.stringify({ event: event, data: data }));
+        }
+
+        socket.addEventListener('open', function () {
             document.getElementById('status').textContent = '🟢 接続済み - 音声認識開始';
             addDebugEntry('システム', 'WebSocket接続が確立されました');
         });
 
-        socket.on('disconnect', function() {
+        socket.addEventListener('close', function () {
             document.getElementById('status').textContent = '🔴 接続切断';
             document.getElementById('status').className = 'status error';
             addDebugEntry('システム', 'WebSocket接続が切断されました');
         });
 
-        socket.on('subtitle', function(data) {
-            displaySubtitle(data.original, data.translated);
-            
-            if (data.debug) {
-                updatePerformanceStats(data.debug);
-                addDebugEntry('翻訳結果', `原文: "${data.original}" → 翻訳: "${data.translated}"`, data.debug);
+        socket.addEventListener('message', function (event) {
+            const msg = JSON.parse(event.data);
+            const data = msg.data || {};
+
+            switch (msg.event) {
+                case 'subtitle':
+                    displaySubtitle(data.original, data.translated);
+                    if (data.debug) {
+                        updatePerformanceStats(data.debug);
+                        addDebugEntry('翻訳結果', `原文: "${data.original}" → 翻訳: "${data.translated}"`, data.debug);
+                    }
+                    break;
+                case 'debug_info':
+                    if (debugEnabled) {
+                        addDebugEntry(data.message, null, data.data, data.timestamp);
+                    }
+                    break;
+                case 'debug_cleared':
+                    document.getElementById('debugLog').innerHTML = '';
+                    addDebugEntry('システム', 'デバッグログがクリアされました');
+                    break;
+                case 'debug_history':
+                    const debugLog = document.getElementById('debugLog');
+                    debugLog.innerHTML = '';
+                    data.history.forEach(entry => {
+                        addDebugEntry(entry.message, null, entry.data, entry.timestamp);
+                    });
+                    if (downloadPending) {
+                        const debugData = {
+                            timestamp: new Date().toISOString(),
+                            performance: performanceData,
+                            history: data.history
+                        };
+                        const blob = new Blob([JSON.stringify(debugData, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `debug_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        addDebugEntry('システム', 'デバッグログをダウンロードしました');
+                        downloadPending = false;
+                    }
+                    break;
             }
-        });
-
-        socket.on('debug_info', function(data) {
-            if (debugEnabled) {
-                addDebugEntry(data.message, null, data.data, data.timestamp);
-            }
-        });
-
-        socket.on('debug_cleared', function() {
-            document.getElementById('debugLog').innerHTML = '';
-            addDebugEntry('システム', 'デバッグログがクリアされました');
-        });
-
-        socket.on('debug_history', function(data) {
-            const debugLog = document.getElementById('debugLog');
-            debugLog.innerHTML = '';
-            data.history.forEach(entry => {
-                addDebugEntry(entry.message, null, entry.data, entry.timestamp);
-            });
         });
 
         // Translation direction handler
         document.getElementById('direction').addEventListener('change', function() {
             const direction = this.value;
-            socket.emit('set_direction', {direction: direction});
+            sendEvent('set_direction', { direction: direction });
             addDebugEntry('設定変更', `翻訳方向を ${direction} に変更`);
         });
 
         document.getElementById('silenceThreshold').addEventListener('change', function() {
             const threshold = parseInt(this.value, 10);
-            socket.emit('set_silence_threshold', {threshold: threshold});
+            sendEvent('set_silence_threshold', { threshold: threshold });
             addDebugEntry('設定変更', `無音しきい値を ${threshold} に変更`);
         });
 
@@ -507,12 +531,12 @@
             debugPanel.style.display = debugEnabled ? 'block' : 'none';
             container.style.gridTemplateColumns = debugEnabled ? '1fr 400px' : '1fr';
 
-            socket.emit('toggle_debug', {enabled: debugEnabled});
+            sendEvent('toggle_debug', { enabled: debugEnabled });
             addDebugEntry('設定変更', `デバッグモード: ${debugEnabled ? 'ON' : 'OFF'}`);
         }
 
         function clearDebugLog() {
-            socket.emit('clear_debug');
+            sendEvent('clear_debug');
             performanceData = {
                 transcriptionTimes: [],
                 translationTimes: [],
@@ -523,29 +547,10 @@
         }
 
         function downloadDebugLog() {
-            socket.emit('get_debug_history');
+            downloadPending = true;
+            sendEvent('get_debug_history');
             // The download will be handled when we receive the debug_history event
         }
-
-        socket.on('debug_history', function(data) {
-            const debugData = {
-                timestamp: new Date().toISOString(),
-                performance: performanceData,
-                history: data.history
-            };
-            
-            const blob = new Blob([JSON.stringify(debugData, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `debug_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            addDebugEntry('システム', 'デバッグログをダウンロードしました');
-        });
 
         // Initialize
         addDebugEntry('システム', 'Webインターフェースが初期化されました');
