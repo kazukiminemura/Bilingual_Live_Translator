@@ -1,61 +1,516 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Live Translation Subtitles</title>
-  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
-  <style>
-    body { font-family: sans-serif; background: #111; color: #fff; text-align: center; margin-top: 50px; }
-    .subtitle { font-size: 1.5em; margin: 1em; }
-    #direction-toggle {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 0.5em 1em;
-      font-size: 1em;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音声翻訳アプリ（デバッグ機能付き）</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+        
+        .main-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .debug-panel {
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 15px;
+            padding: 20px;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #4a5568;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        select, button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        select:hover, button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            background: linear-gradient(45deg, #48bb78, #38a169);
+            color: white;
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
+        }
+        
+        .subtitle-display {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            min-height: 120px;
+        }
+        
+        .subtitle-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .original {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+        
+        .translated {
+            font-size: 16px;
+            color: #4a5568;
+            font-style: italic;
+        }
+        
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+        }
+        
+        .debug-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        
+        .debug-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .debug-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+            background: #374151;
+            border: 1px solid #6b7280;
+            color: #d1d5db;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .debug-btn:hover {
+            background: #4b5563;
+        }
+        
+        .debug-entry {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #10b981;
+        }
+        
+        .debug-timestamp {
+            color: #9ca3af;
+            font-size: 11px;
+        }
+        
+        .debug-message {
+            color: #e5e7eb;
+            margin: 2px 0;
+        }
+        
+        .debug-data {
+            color: #fbbf24;
+            font-size: 11px;
+            white-space: pre-wrap;
+            margin-top: 4px;
+        }
+        
+        .performance-stats {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #10b981;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .debug-panel {
+                order: -1;
+                max-height: 300px;
+            }
+        }
+        
+        .error {
+            background: linear-gradient(45deg, #f56565, #e53e3e);
+        }
+        
+        .warning {
+            background: linear-gradient(45deg, #ed8936, #dd6b20);
+        }
+    </style>
 </head>
 <body>
-  <h1>🎙️ 多言語リアルタイム翻訳</h1>
-  <button id="direction-toggle">日本語 ➡ 英語</button>
-  <div id="subtitles"></div>
+    <div class="container">
+        <div class="main-panel">
+            <h1>🎤 音声翻訳アプリ</h1>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label for="direction">翻訳方向:</label>
+                    <select id="direction">
+                        <option value="ja-en">日本語 → 英語</option>
+                        <option value="en-ja">英語 → 日本語</option>
+                    </select>
+                </div>
+                
+                <div class="control-group">
+                    <label for="debugToggle">デバッグモード:</label>
+                    <button id="debugToggle" onclick="toggleDebug()">ON</button>
+                </div>
+            </div>
+            
+            <div class="status" id="status">
+                接続中...
+            </div>
+            
+            <div class="performance-stats" id="performanceStats" style="display: none;">
+                <h3>📊 パフォーマンス統計</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="avgTranscriptionTime">-</div>
+                        <div class="stat-label">平均転写時間</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="avgTranslationTime">-</div>
+                        <div class="stat-label">平均翻訳時間</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalProcessed">0</div>
+                        <div class="stat-label">処理済み発話</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="avgPeakAmplitude">-</div>
+                        <div class="stat-label">平均音声レベル</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="subtitle-display" id="subtitles">
+                <p style="text-align: center; color: #718096;">音声認識を開始しています...</p>
+            </div>
+        </div>
+        
+        <div class="debug-panel">
+            <div class="debug-header">
+                <div class="debug-title">🐛 デバッグログ</div>
+                <div class="debug-controls">
+                    <button class="debug-btn" onclick="clearDebugLog()">クリア</button>
+                    <button class="debug-btn" onclick="downloadDebugLog()">ダウンロード</button>
+                </div>
+            </div>
+            <div id="debugLog">
+                <div class="debug-entry">
+                    <div class="debug-timestamp">--:--:--.---</div>
+                    <div class="debug-message">デバッグログを初期化中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-  <script>
-    const socket = io();
-    const container = document.getElementById('subtitles');
-    const directionButton = document.getElementById('direction-toggle');
-    let direction = 'ja-en';
+    <script>
+        const socket = io();
+        let debugEnabled = true;
+        let performanceData = {
+            transcriptionTimes: [],
+            translationTimes: [],
+            peakAmplitudes: [],
+            totalProcessed: 0
+        };
 
-    function updateButton() {
-      directionButton.textContent = direction === 'ja-en'
-        ? '日本語 ➡ 英語'
-        : '英語 ➡ 日本語';
-    }
+        // Socket event handlers
+        socket.on('connect', function() {
+            document.getElementById('status').textContent = '🟢 接続済み - 音声認識開始';
+            addDebugEntry('システム', 'WebSocket接続が確立されました');
+        });
 
-    // Notify server of initial direction
-    socket.emit('set_direction', { direction });
-    updateButton();
+        socket.on('disconnect', function() {
+            document.getElementById('status').textContent = '🔴 接続切断';
+            document.getElementById('status').className = 'status error';
+            addDebugEntry('システム', 'WebSocket接続が切断されました');
+        });
 
-    directionButton.addEventListener('click', () => {
-      direction = direction === 'ja-en' ? 'en-ja' : 'ja-en';
-      updateButton();
-      socket.emit('set_direction', { direction });
-    });
+        socket.on('subtitle', function(data) {
+            displaySubtitle(data.original, data.translated);
+            
+            if (data.debug) {
+                updatePerformanceStats(data.debug);
+                addDebugEntry('翻訳結果', `原文: "${data.original}" → 翻訳: "${data.translated}"`, data.debug);
+            }
+        });
 
-    socket.on('subtitle', data => {
-      const original = document.createElement('div');
-      original.className = 'subtitle';
-      original.textContent = '🗣️ 発話: ' + data.original;
+        socket.on('debug_info', function(data) {
+            if (debugEnabled) {
+                addDebugEntry(data.message, null, data.data, data.timestamp);
+            }
+        });
 
-      const translated = document.createElement('div');
-      translated.className = 'subtitle';
-      translated.textContent = '🌐 翻訳: ' + data.translated;
+        socket.on('debug_cleared', function() {
+            document.getElementById('debugLog').innerHTML = '';
+            addDebugEntry('システム', 'デバッグログがクリアされました');
+        });
 
-      container.appendChild(original);
-      container.appendChild(translated);
-      translated.scrollIntoView({ behavior: 'smooth' });
-    });
-  </script>
+        socket.on('debug_history', function(data) {
+            const debugLog = document.getElementById('debugLog');
+            debugLog.innerHTML = '';
+            data.history.forEach(entry => {
+                addDebugEntry(entry.message, null, entry.data, entry.timestamp);
+            });
+        });
+
+        // Translation direction handler
+        document.getElementById('direction').addEventListener('change', function() {
+            const direction = this.value;
+            socket.emit('set_direction', {direction: direction});
+            addDebugEntry('設定変更', `翻訳方向を ${direction} に変更`);
+        });
+
+        function displaySubtitle(original, translated) {
+            const subtitlesDiv = document.getElementById('subtitles');
+            const subtitleItem = document.createElement('div');
+            subtitleItem.className = 'subtitle-item';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            subtitleItem.innerHTML = `
+                <div style="font-size: 12px; color: #718096; margin-bottom: 5px;">${timestamp}</div>
+                <div class="original">${original}</div>
+                <div class="translated">${translated}</div>
+            `;
+            
+            subtitlesDiv.appendChild(subtitleItem);
+            
+            // Keep only last 5 subtitles
+            while (subtitlesDiv.children.length > 6) { // +1 for initial message
+                subtitlesDiv.removeChild(subtitlesDiv.children[1]); // Skip first child (initial message)
+            }
+            
+            // Scroll to bottom
+            subtitlesDiv.scrollTop = subtitlesDiv.scrollHeight;
+        }
+
+        function addDebugEntry(message, detail, data, timestamp) {
+            if (!debugEnabled) return;
+            
+            const debugLog = document.getElementById('debugLog');
+            const entry = document.createElement('div');
+            entry.className = 'debug-entry';
+            
+            const ts = timestamp || new Date().toLocaleTimeString() + '.' + String(new Date().getMilliseconds()).padStart(3, '0');
+            
+            let content = `
+                <div class="debug-timestamp">${ts}</div>
+                <div class="debug-message">${message}</div>
+            `;
+            
+            if (detail) {
+                content += `<div class="debug-message" style="margin-left: 10px; color: #cbd5e0;">${detail}</div>`;
+            }
+            
+            if (data) {
+                content += `<div class="debug-data">${JSON.stringify(data, null, 2)}</div>`;
+            }
+            
+            entry.innerHTML = content;
+            debugLog.appendChild(entry);
+            
+            // Keep only last 100 entries
+            while (debugLog.children.length > 100) {
+                debugLog.removeChild(debugLog.firstChild);
+            }
+            
+            // Scroll to bottom
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+
+        function updatePerformanceStats(debugData) {
+            if (debugData.transcription_time) {
+                const time = parseFloat(debugData.transcription_time.replace('s', ''));
+                performanceData.transcriptionTimes.push(time);
+                if (performanceData.transcriptionTimes.length > 20) {
+                    performanceData.transcriptionTimes.shift();
+                }
+            }
+            
+            if (debugData.translation_time) {
+                const time = parseFloat(debugData.translation_time.replace('s', ''));
+                performanceData.translationTimes.push(time);
+                if (performanceData.translationTimes.length > 20) {
+                    performanceData.translationTimes.shift();
+                }
+            }
+            
+            if (debugData.peak_amplitude) {
+                performanceData.peakAmplitudes.push(debugData.peak_amplitude);
+                if (performanceData.peakAmplitudes.length > 20) {
+                    performanceData.peakAmplitudes.shift();
+                }
+            }
+            
+            performanceData.totalProcessed++;
+            
+            // Update display
+            document.getElementById('performanceStats').style.display = 'block';
+            
+            if (performanceData.transcriptionTimes.length > 0) {
+                const avgTranscription = performanceData.transcriptionTimes.reduce((a, b) => a + b, 0) / performanceData.transcriptionTimes.length;
+                document.getElementById('avgTranscriptionTime').textContent = avgTranscription.toFixed(2) + 's';
+            }
+            
+            if (performanceData.translationTimes.length > 0) {
+                const avgTranslation = performanceData.translationTimes.reduce((a, b) => a + b, 0) / performanceData.translationTimes.length;
+                document.getElementById('avgTranslationTime').textContent = avgTranslation.toFixed(2) + 's';
+            }
+            
+            if (performanceData.peakAmplitudes.length > 0) {
+                const avgPeak = performanceData.peakAmplitudes.reduce((a, b) => a + b, 0) / performanceData.peakAmplitudes.length;
+                document.getElementById('avgPeakAmplitude').textContent = avgPeak.toFixed(0);
+            }
+            
+            document.getElementById('totalProcessed').textContent = performanceData.totalProcessed;
+        }
+
+        function toggleDebug() {
+            debugEnabled = !debugEnabled;
+            const button = document.getElementById('debugToggle');
+            button.textContent = debugEnabled ? 'ON' : 'OFF';
+            button.style.background = debugEnabled ? 
+                'linear-gradient(45deg, #10b981, #059669)' : 
+                'linear-gradient(45deg, #6b7280, #4b5563)';
+            
+            socket.emit('toggle_debug', {enabled: debugEnabled});
+            addDebugEntry('設定変更', `デバッグモード: ${debugEnabled ? 'ON' : 'OFF'}`);
+        }
+
+        function clearDebugLog() {
+            socket.emit('clear_debug');
+            performanceData = {
+                transcriptionTimes: [],
+                translationTimes: [],
+                peakAmplitudes: [],
+                totalProcessed: 0
+            };
+            document.getElementById('performanceStats').style.display = 'none';
+        }
+
+        function downloadDebugLog() {
+            socket.emit('get_debug_history');
+            // The download will be handled when we receive the debug_history event
+        }
+
+        socket.on('debug_history', function(data) {
+            const debugData = {
+                timestamp: new Date().toISOString(),
+                performance: performanceData,
+                history: data.history
+            };
+            
+            const blob = new Blob([JSON.stringify(debugData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `debug_log_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            addDebugEntry('システム', 'デバッグログをダウンロードしました');
+        });
+
+        // Initialize
+        addDebugEntry('システム', 'Webインターフェースが初期化されました');
+    </script>
 </body>
 </html>
