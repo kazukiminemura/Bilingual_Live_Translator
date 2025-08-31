@@ -70,7 +70,7 @@
             font-weight: bold;
         }
         
-        select, button, input[type="number"] {
+        button, input[type="number"] {
             padding: 12px 20px;
             border: none;
             border-radius: 8px;
@@ -83,13 +83,27 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             min-width: 120px;
         }
-        
+
+        select {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background: white;
+            color: black;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            min-width: 120px;
+        }
+
         input[type="number"] {
             text-align: center;
             width: 80px;
             min-width: 80px;
         }
-        
+
         select:hover, button:hover, input[type="number"]:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -494,10 +508,17 @@
             }
         }
 
+        function clearSubtitles() {
+            const subtitlesDiv = document.getElementById('subtitles');
+            subtitlesDiv.innerHTML = '<div class="placeholder-text">音声認識を開始しています...</div>';
+        }
+
         // Translation direction handler
         document.getElementById('direction').addEventListener('change', function() {
             const direction = this.value;
             sendEvent('set_direction', { direction: direction });
+            clearSubtitles();
+            clearDebugLog();
             addDebugEntry('設定変更', `翻訳方向を ${direction} に変更`);
         });
 
