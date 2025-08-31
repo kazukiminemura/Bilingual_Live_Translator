@@ -1,4 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional
 import tempfile
@@ -8,6 +10,8 @@ import os
 from app import BilingualLiveTranslator
 
 app = FastAPI(title="Bilingual Live Translator")
+
+templates = Jinja2Templates(directory="templates")
 
 translator = BilingualLiveTranslator()
 
@@ -60,6 +64,7 @@ async def translate_text(req: TextTranslationRequest):
     return {"original": req.text, "translation": translation}
 
 
-@app.get("/")
-async def root():
-    return {"message": "Bilingual Live Translator API"}
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the main HTML interface."""
+    return templates.TemplateResponse("index.html", {"request": request})
