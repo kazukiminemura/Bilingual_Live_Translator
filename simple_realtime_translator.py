@@ -25,12 +25,12 @@ model = whisper.load_model("medium")
 # Explicitly run translations on the CPU to avoid failures when no GPU is
 # available.  The pipeline defaults to ``device=0`` if CUDA is detected, which
 # prevents translations from executing on CPU-only systems and results in no
-# subtitles being emitted.
+# subtitles being emitted.  Setting ``device=-1`` forces CPU execution.
 translator_ja_en = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=0
+    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
 )
 translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=0
+    "translation", model="Helsinki-NLP/opus-mt-en-ja", device=-1
 )
 
 # Default translation direction (Japanese -> English)
