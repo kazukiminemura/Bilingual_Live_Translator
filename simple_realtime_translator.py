@@ -1,45 +1,63 @@
-# Realtime Speech Translation Web App with Debug Features
-# (Flask + WebSocket + Whisper + HuggingFace)
+"""Realtime Speech Translation Web App using FastAPI and WebSocket.
 
-import os
-import time
-import whisper
-import threading
-import sounddevice as sd
-import numpy as np
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
-from transformers import pipeline
-import tempfile
-import wave
+This module rewrites the original Flask based implementation to use
+`FastAPI` and its native WebSocket support.  Audio is recorded on the
+server, transcribed with Whisper and translated with HuggingFace
+translation models.  Results and debug information are pushed to all
+connected WebSocket clients.
+"""
+
+from __future__ import annotations
+
+import asyncio
 import json
+import os
 import queue
+import tempfile
+import threading
+import time
+import wave
 from datetime import datetime
+from typing import Dict, Set
 
-# Initialize components
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+import numpy as np
+import sounddevice as sd
+import whisper
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from transformers import pipeline
+
+
+# ---------------------------------------------------------------------------
+# Application setup
+# ---------------------------------------------------------------------------
+
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+# Maintain active websocket connections.  We keep a simple set of WebSocket
+# objects and broadcast to all connected clients whenever new information is
+# available.
+connections: Set[WebSocket] = set()
+
+# Load Whisper model and translation pipelines.  Translation is executed on
+# CPU so that the application also works on machines without a GPU.
 model = whisper.load_model("medium")
+translator_ja_en = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en", device=0)
+translator_en_ja = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap", device=0)
 
-# Prepare translation pipelines for both directions
-# Explicitly run translations on the CPU to avoid failures when no GPU is
-# available.  The pipeline defaults to ``device=0`` if CUDA is detected, which
-# prevents translations from executing on CPU-only systems and results in no
-# subtitles being emitted.
-translator_ja_en = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=0
-)
-translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=0
-)
+
+# ---------------------------------------------------------------------------
+# Application state and configuration
+# ---------------------------------------------------------------------------
 
 # Default translation direction (Japanese -> English)
-translation_direction = 'ja-en'
+translation_direction = "ja-en"
 
-# Audio config
+# Audio configuration
 FS = 16000
 CHANNELS = 3
-# Record shorter clips so speech recognition and translation run every second
 RECORD_SECONDS = 1
 
 # Silence detection threshold (peak amplitude)
@@ -47,76 +65,90 @@ silence_threshold = 100
 
 # Debug settings
 DEBUG_MODE = True
-debug_history = []  # Store debug information
-audio_queue = queue.Queue(maxsize=5)
+debug_history: list[Dict] = []
+audio_queue: "queue.Queue[tuple[str, float]]" = queue.Queue(maxsize=5)
 
-def log_debug(message, data=None):
-    """Log debug information with timestamp."""
+
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
+
+def broadcast(event: str, data: Dict) -> None:
+    """Broadcast an event with data to all connected clients."""
+
+    async def _broadcast() -> None:
+        for ws in list(connections):
+            try:
+                await ws.send_json({"event": event, "data": data})
+            except Exception:
+                # Ignore failures for disconnected clients
+                pass
+
+    # ``asyncio.run`` is safe here because this function is only invoked from
+    # background threads.  Each call creates a short-lived event loop.
+    asyncio.run(_broadcast())
+
+
+def log_debug(message: str, data: Dict | None = None) -> None:
+    """Log debug information and emit it to clients."""
+
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-    debug_entry = {
-        "timestamp": timestamp,
-        "message": message,
-        "data": data
-    }
+    debug_entry = {"timestamp": timestamp, "message": message, "data": data}
     debug_history.append(debug_entry)
-    
-    # Keep only last 50 entries to prevent memory issues
+
+    # Keep only the last 50 entries
     if len(debug_history) > 50:
         debug_history.pop(0)
-    
+
     if DEBUG_MODE:
         print(f"[DEBUG {timestamp}] {message}")
         if data:
             print(f"[DEBUG {timestamp}] Data: {json.dumps(data, indent=2, ensure_ascii=False)}")
-    
-    # Emit debug info to web interface
-    socketio.emit("debug_info", debug_entry)
 
-def record_audio_to_file():
-    """Record from microphone and return temporary WAV file path and peak amplitude.
+    broadcast("debug_info", debug_entry)
 
-    The peak amplitude is used to quickly detect whether the user actually
-    spoke.  Whisper can hallucinate text on completely silent audio, so by
-    measuring the recorded signal we can skip unnecessary transcription and
-    avoid emitting subtitles when no input was provided.
-    """
+
+# ---------------------------------------------------------------------------
+# Audio recording and processing
+# ---------------------------------------------------------------------------
+
+def record_audio_to_file() -> tuple[str, float]:
+    """Record audio from the microphone and store it in a temporary file."""
+
     log_debug("Starting audio recording", {"duration": RECORD_SECONDS, "sample_rate": FS})
-
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-    print("[INFO] Recording...")
-    
+
     start_time = time.time()
-    audio = sd.rec(
-        int(RECORD_SECONDS * FS),
-        samplerate=FS,
-        channels=CHANNELS,
-        dtype="int16",
-    )
+    audio = sd.rec(int(RECORD_SECONDS * FS), samplerate=FS, channels=CHANNELS, dtype="int16")
     sd.wait()
     recording_time = time.time() - start_time
-    
+
     peak = float(np.max(np.abs(audio)))
     rms = float(np.sqrt(np.mean(audio**2)))
-    
-    log_debug("Audio recording completed", {
-        "file_path": tmp_file.name,
-        "peak_amplitude": peak,
-        "rms_amplitude": rms,
-        "recording_time": f"{recording_time:.2f}s",
-        "audio_shape": audio.shape
-    })
+
+    log_debug(
+        "Audio recording completed",
+        {
+            "file_path": tmp_file.name,
+            "peak_amplitude": peak,
+            "rms_amplitude": rms,
+            "recording_time": f"{recording_time:.2f}s",
+            "audio_shape": audio.shape,
+        },
+    )
 
     with wave.open(tmp_file.name, "wb") as wf:
         wf.setnchannels(CHANNELS)
         wf.setsampwidth(2)
         wf.setframerate(FS)
         wf.writeframes(audio.tobytes())
-    
-    log_debug("Audio file saved", {"file_size": os.path.getsize(tmp_file.name)})
+
     return tmp_file.name, peak
 
-def record_audio_loop():
-    """Background thread: records audio and queues it for processing."""
+
+def record_audio_loop() -> None:
+    """Background thread that records audio and queues it for processing."""
+
     log_debug("Background recording thread started")
     while True:
         wav_path, peak = record_audio_to_file()
@@ -127,10 +159,10 @@ def record_audio_loop():
         audio_queue.put((wav_path, peak))
 
 
-def recognize_and_translate():
-    """Background thread: transcribes, translates, and emits results from queued audio."""
-    log_debug("Background recognition thread started")
+def recognize_and_translate() -> None:
+    """Background thread that performs speech recognition and translation."""
 
+    log_debug("Background recognition thread started")
     while True:
         wav_path, peak = audio_queue.get()
         try:
@@ -142,56 +174,21 @@ def recognize_and_translate():
             original_text = result.get("text", "").strip()
             segments = result.get("segments", [])
 
-            # Log detailed transcription results
-            log_debug("Transcription completed", {
-                "original_text": original_text,
-                "transcription_time": f"{transcription_time:.2f}s",
-                "language": result.get("language"),
-                "segments_count": len(segments),
-                "segments": [
-                    {
-                        "text": seg.get("text", "").strip(),
-                        "start": seg.get("start"),
-                        "end": seg.get("end"),
-                        "no_speech_prob": seg.get("no_speech_prob")
-                    } for seg in segments
-                ]
-            })
+            log_debug(
+                "Transcription completed",
+                {
+                    "original_text": original_text,
+                    "transcription_time": f"{transcription_time:.2f}s",
+                    "language": result.get("language"),
+                    "segments_count": len(segments),
+                },
+            )
 
             if not original_text:
                 log_debug("Skipping empty transcription")
                 continue
 
-            high_no_speech_segments = [
-                seg for seg in segments if seg.get("no_speech_prob", 0) > 0.6
-            ]
-
-            # Whisper can assign high ``no_speech_prob`` values to very short
-            # recordings even when speech is present.  When ``RECORD_SECONDS`` is
-            # set to 1 this would cause valid speech to be skipped entirely.  To
-            # ensure subtitles are still produced for these short clips we only
-            # apply the "high no-speech" filter when the recording duration is
-            # long enough to make the probability reliable.
-            if (
-                RECORD_SECONDS > 1
-                and len(high_no_speech_segments) == len(segments)
-                and segments
-            ):
-                log_debug(
-                    "Skipping high no-speech probability segments",
-                    {
-                        "total_segments": len(segments),
-                        "high_no_speech_segments": len(high_no_speech_segments),
-                    },
-                )
-                continue
-
-            # Choose translation pipeline based on current direction
-            log_debug("Starting translation", {
-                "direction": translation_direction,
-                "input_text": original_text
-            })
-
+            log_debug("Starting translation", {"direction": translation_direction, "input_text": original_text})
             translation_start = time.time()
             if translation_direction == "ja-en":
                 translation_result = translator_ja_en(original_text)
@@ -201,113 +198,125 @@ def recognize_and_translate():
                 translation = translation_result[0]["translation_text"]
             translation_time = time.time() - translation_start
 
-            log_debug("Translation completed", {
-                "translated_text": translation,
-                "translation_time": f"{translation_time:.2f}s",
-                "translation_model": "Helsinki-NLP/opus-mt-ja-en" if translation_direction == "ja-en" else "Helsinki-NLP/opus-mt-en-ja"
-            })
-
-            print(f"[INFO] Original: {original_text} | Translated: {translation}")
-
-            # Emit results with debug information
-            socketio.emit("subtitle", {
-                "original": original_text,
-                "translated": translation,
-                "debug": {
-                    "peak_amplitude": peak,
-                    "transcription_time": f"{transcription_time:.2f}s",
+            log_debug(
+                "Translation completed",
+                {
+                    "translated_text": translation,
                     "translation_time": f"{translation_time:.2f}s",
-                    "language_detected": result.get("language"),
-                    "segments_count": len(segments),
-                    "direction": translation_direction
-                }
-            })
+                },
+            )
 
-            log_debug("Processing cycle completed successfully")
+            broadcast(
+                "subtitle",
+                {
+                    "original": original_text,
+                    "translated": translation,
+                    "debug": {
+                        "peak_amplitude": peak,
+                        "transcription_time": f"{transcription_time:.2f}s",
+                        "translation_time": f"{translation_time:.2f}s",
+                        "language_detected": result.get("language"),
+                        "segments_count": len(segments),
+                        "direction": translation_direction,
+                    },
+                },
+            )
 
-        except Exception as e:
-            error_msg = f"Error in recognition/translation: {str(e)}"
+        except Exception as e:  # pragma: no cover - best effort logging
+            error_msg = f"Error in recognition/translation: {e}"
             log_debug("ERROR occurred", {"error": error_msg, "error_type": type(e).__name__})
-            print(f"[ERROR] {error_msg}")
         finally:
             if os.path.exists(wav_path):
                 os.remove(wav_path)
             audio_queue.task_done()
 
-@app.route('/')
-def index():
-    return render_template('index.html')
 
-@socketio.on('connect')
-def on_connect():
+# ---------------------------------------------------------------------------
+# Web routes and websocket handling
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request) -> HTMLResponse:
+    """Serve the main HTML page."""
+
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket) -> None:
+    """Handle websocket connections from the client."""
+
+    await ws.accept()
+    connections.add(ws)
     log_debug("Client connected")
-    print("[INFO] Client connected")
-    # Send current debug history to newly connected client
-    for entry in debug_history[-10:]:  # Send last 10 entries
-        emit("debug_info", entry)
 
-@socketio.on('set_direction')
-def on_set_direction(data):
-    """Update translation direction based on client selection."""
-    global translation_direction
-    direction = data.get('direction')
-    if direction in ('ja-en', 'en-ja'):
-        old_direction = translation_direction
-        translation_direction = direction
-        log_debug("Translation direction changed", {
-            "old_direction": old_direction,
-            "new_direction": translation_direction
-        })
-        print(f"[INFO] Translation direction set to {translation_direction}")
+    # Send recent debug history to the new client
+    for entry in debug_history[-10:]:
+        await ws.send_json({"event": "debug_info", "data": entry})
 
-@socketio.on('set_silence_threshold')
-def on_set_silence_threshold(data):
-    """Update silence detection threshold."""
-    global silence_threshold
-    threshold = data.get('threshold')
-    if isinstance(threshold, (int, float)) and threshold >= 0:
-        old_threshold = silence_threshold
-        silence_threshold = threshold
-        log_debug("Silence threshold changed", {
-            "old_threshold": old_threshold,
-            "new_threshold": silence_threshold
-        })
-        print(f"[INFO] Silence threshold set to {silence_threshold}")
+    try:
+        while True:
+            message = await ws.receive_json()
+            event = message.get("event")
+            data = message.get("data", {})
 
-@socketio.on('toggle_debug')
-def on_toggle_debug(data):
-    """Toggle debug mode on/off."""
-    global DEBUG_MODE
-    DEBUG_MODE = data.get('enabled', True)
-    log_debug("Debug mode toggled", {"debug_enabled": DEBUG_MODE})
+            if event == "set_direction":
+                global translation_direction
+                direction = data.get("direction")
+                if direction in ("ja-en", "en-ja"):
+                    old = translation_direction
+                    translation_direction = direction
+                    log_debug("Translation direction changed", {"old_direction": old, "new_direction": direction})
 
-@socketio.on('clear_debug')
-def on_clear_debug():
-    """Clear debug history."""
-    global debug_history
-    debug_history.clear()
-    log_debug("Debug history cleared")
-    emit("debug_cleared")
+            elif event == "set_silence_threshold":
+                global silence_threshold
+                threshold = data.get("threshold")
+                if isinstance(threshold, (int, float)) and threshold >= 0:
+                    old = silence_threshold
+                    silence_threshold = threshold
+                    log_debug("Silence threshold changed", {"old_threshold": old, "new_threshold": threshold})
 
-@socketio.on('get_debug_history')
-def on_get_debug_history():
-    """Send current debug history to client."""
-    emit("debug_history", {"history": debug_history})
+            elif event == "toggle_debug":
+                global DEBUG_MODE
+                DEBUG_MODE = data.get("enabled", True)
+                log_debug("Debug mode toggled", {"debug_enabled": DEBUG_MODE})
 
-if __name__ == '__main__':
-    log_debug("Application starting", {
-        "whisper_model": "medium",
-        "translation_models": ["Helsinki-NLP/opus-mt-ja-en", "Helsinki-NLP/opus-mt-en-ja"],
-        "default_direction": translation_direction,
-        "audio_config": {
-            "sample_rate": FS,
-            "channels": CHANNELS,
-            "record_duration": RECORD_SECONDS
-        }
-    })
-    
+            elif event == "clear_debug":
+                debug_history.clear()
+                log_debug("Debug history cleared")
+                await ws.send_json({"event": "debug_cleared"})
+
+            elif event == "get_debug_history":
+                await ws.send_json({"event": "debug_history", "data": {"history": debug_history}})
+
+    except WebSocketDisconnect:
+        connections.discard(ws)
+        log_debug("Client disconnected")
+
+
+# ---------------------------------------------------------------------------
+# Application entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    log_debug(
+        "Application starting",
+        {
+            "whisper_model": "medium",
+            "translation_models": [
+                "Helsinki-NLP/opus-mt-ja-en",
+                "Helsinki-NLP/opus-mt-en-jap",
+            ],
+            "default_direction": translation_direction,
+            "audio_config": {"sample_rate": FS, "channels": CHANNELS, "record_duration": RECORD_SECONDS},
+        },
+    )
+
     # Start background threads for recording and processing
     threading.Thread(target=record_audio_loop, daemon=True).start()
     threading.Thread(target=recognize_and_translate, daemon=True).start()
-    # Run Flask app
-    socketio.run(app, host='0.0.0.0', port=5000)
+
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
