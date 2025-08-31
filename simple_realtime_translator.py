@@ -39,7 +39,8 @@ translation_direction = 'ja-en'
 # Audio config
 FS = 16000
 CHANNELS = 1
-RECORD_SECONDS = 3
+# Record shorter clips so speech recognition and translation run every second
+RECORD_SECONDS = 1
 
 # Silence detection threshold (peak amplitude)
 silence_threshold = 10

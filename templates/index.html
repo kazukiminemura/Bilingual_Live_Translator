@@ -378,7 +378,8 @@
 
         function displaySubtitle(original, translated) {
             const subtitlesDiv = document.getElementById('subtitles');
-            if (subtitlesDiv.firstChild && subtitlesDiv.firstChild.tagName === 'P') {
+            // Remove placeholder message once real subtitles arrive
+            if (subtitlesDiv.firstElementChild && subtitlesDiv.firstElementChild.tagName === 'P') {
                 subtitlesDiv.innerHTML = '';
             }
             const subtitleItem = document.createElement('div');
