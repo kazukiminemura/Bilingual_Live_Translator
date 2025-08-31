@@ -29,35 +29,69 @@ CHANNELS = 1
 RECORD_SECONDS = 3
 
 def record_audio_to_file():
-    """Record from microphone and return temporary WAV file path."""
+    """Record from microphone and return temporary WAV file path and peak amplitude.
+
+    The peak amplitude is used to quickly detect whether the user actually
+    spoke.  Whisper can hallucinate text on completely silent audio, so by
+    measuring the recorded signal we can skip unnecessary transcription and
+    avoid emitting subtitles when no input was provided.
+    """
+
     tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     print("[INFO] Recording...")
-    audio = sd.rec(int(RECORD_SECONDS * FS), samplerate=FS, channels=CHANNELS, dtype='int16')
+    audio = sd.rec(
+        int(RECORD_SECONDS * FS),
+        samplerate=FS,
+        channels=CHANNELS,
+        dtype="int16",
+    )
     sd.wait()
-    with wave.open(tmp_file.name, 'wb') as wf:
+    peak = float(np.max(np.abs(audio)))
+
+    with wave.open(tmp_file.name, "wb") as wf:
         wf.setnchannels(CHANNELS)
         wf.setsampwidth(2)
         wf.setframerate(FS)
         wf.writeframes(audio.tobytes())
     print("[INFO] Recording saved to:", tmp_file.name)
-    return tmp_file.name
+    return tmp_file.name, peak
 
 def recognize_and_translate():
     """Background thread: records, transcribes, translates, and emits results."""
     while True:
         try:
-            wav_path = record_audio_to_file()
+            wav_path, peak = record_audio_to_file()
+
+            # Skip processing when the recorded audio is effectively silent
+            if peak < 500:  # empirical threshold for background noise
+                os.remove(wav_path)
+                continue
+
             result = model.transcribe(wav_path)
-            original_text = result['text']
+            original_text = result.get("text", "").strip()
+
+            # Whisper may still output hallucinated text for silent segments.
+            # Check the no_speech_prob of each segment and ignore if all
+            # indicate silence or if the text itself is empty.
+            segments = result.get("segments", [])
+            if not original_text or all(
+                seg.get("no_speech_prob", 0) > 0.6 for seg in segments
+            ):
+                os.remove(wav_path)
+                continue
 
             # Choose translation pipeline based on current direction
-            if translation_direction == 'ja-en':
-                translation = translator_ja_en(original_text)[0]['translation_text']
+            if translation_direction == "ja-en":
+                translation = translator_ja_en(original_text)[0]["translation_text"]
             else:
-                translation = translator_en_ja(original_text)[0]['translation_text']
+                translation = translator_en_ja(original_text)[0]["translation_text"]
 
-            print(f"[INFO] Original: {original_text} | Translated: {translation}")
-            socketio.emit('subtitle', {'original': original_text, 'translated': translation})
+            print(
+                f"[INFO] Original: {original_text} | Translated: {translation}"
+            )
+            socketio.emit(
+                "subtitle", {"original": original_text, "translated": translation}
+            )
             os.remove(wav_path)
         except Exception as e:
             print("[ERROR]", e)
