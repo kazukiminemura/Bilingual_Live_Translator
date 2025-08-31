@@ -245,7 +245,12 @@
                         <option value="en-ja">英語 → 日本語</option>
                     </select>
                 </div>
-                
+
+                <div class="control-group">
+                    <label for="silenceThreshold">無音しきい値:</label>
+                    <input type="number" id="silenceThreshold" value="500" min="0" max="1000" step="10">
+                </div>
+
                 <div class="control-group">
                     <label for="debugToggle">デバッグモード:</label>
                     <button id="debugToggle" onclick="toggleDebug()">ON</button>
@@ -355,6 +360,12 @@
             const direction = this.value;
             socket.emit('set_direction', {direction: direction});
             addDebugEntry('設定変更', `翻訳方向を ${direction} に変更`);
+        });
+
+        document.getElementById('silenceThreshold').addEventListener('change', function() {
+            const threshold = parseInt(this.value, 10);
+            socket.emit('set_silence_threshold', {threshold: threshold});
+            addDebugEntry('設定変更', `無音しきい値を ${threshold} に変更`);
         });
 
         function displaySubtitle(original, translated) {
