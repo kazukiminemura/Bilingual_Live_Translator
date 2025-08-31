@@ -40,6 +40,9 @@ FS = 16000
 CHANNELS = 1
 RECORD_SECONDS = 3
 
+# Silence detection threshold (peak amplitude)
+silence_threshold = 500
+
 # Debug settings
 DEBUG_MODE = True
 debug_history = []  # Store debug information
@@ -118,8 +121,8 @@ def recognize_and_translate():
             wav_path, peak = record_audio_to_file()
 
             # Skip processing when the recorded audio is effectively silent
-            if peak < 500:  # empirical threshold for background noise
-                log_debug("Skipping silent audio", {"peak": peak, "threshold": 500})
+            if peak < silence_threshold:  # empirical threshold for background noise
+                log_debug("Skipping silent audio", {"peak": peak, "threshold": silence_threshold})
                 os.remove(wav_path)
                 continue
 
@@ -236,6 +239,20 @@ def on_set_direction(data):
             "new_direction": translation_direction
         })
         print(f"[INFO] Translation direction set to {translation_direction}")
+
+@socketio.on('set_silence_threshold')
+def on_set_silence_threshold(data):
+    """Update silence detection threshold."""
+    global silence_threshold
+    threshold = data.get('threshold')
+    if isinstance(threshold, (int, float)) and threshold >= 0:
+        old_threshold = silence_threshold
+        silence_threshold = threshold
+        log_debug("Silence threshold changed", {
+            "old_threshold": old_threshold,
+            "new_threshold": silence_threshold
+        })
+        print(f"[INFO] Silence threshold set to {silence_threshold}")
 
 @socketio.on('toggle_debug')
 def on_toggle_debug(data):
