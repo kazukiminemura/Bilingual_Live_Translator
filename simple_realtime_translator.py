@@ -18,7 +18,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 model = whisper.load_model("medium")
 # Prepare translation pipelines for both directions
 translator_ja_en = pipeline("translation", model="Helsinki-NLP/opus-mt-ja-en")
-translator_en_ja = pipeline("translation", model="Helsinki-NLP/opus-mt-en-ja")
+translator_en_ja = pipeline("translation", model="Helsinki-NLP/opus-mt-en-jap")
 
 # Default translation direction (Japanese -> English)
 translation_direction = 'ja-en'
