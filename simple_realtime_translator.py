@@ -26,7 +26,7 @@ model = whisper.load_model("medium")
 # prevents translations from executing on CPU-only systems and results in no
 # subtitles being emitted.
 translator_ja_en = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-jap-en", device=-1
 )
 translator_en_ja = pipeline(
     "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
@@ -182,7 +182,7 @@ def recognize_and_translate():
             log_debug("Translation completed", {
                 "translated_text": translation,
                 "translation_time": f"{translation_time:.2f}s",
-                "translation_model": "Helsinki-NLP/opus-mt-ja-en" if translation_direction == "ja-en" else "Helsinki-NLP/opus-mt-en-jap"
+                "translation_model": "Helsinki-NLP/opus-mt-jap-en" if translation_direction == "ja-en" else "Helsinki-NLP/opus-mt-en-jap"
             })
 
             print(f"[INFO] Original: {original_text} | Translated: {translation}")
@@ -260,7 +260,7 @@ def on_get_debug_history():
 if __name__ == '__main__':
     log_debug("Application starting", {
         "whisper_model": "medium",
-        "translation_models": ["Helsinki-NLP/opus-mt-ja-en", "Helsinki-NLP/opus-mt-en-jap"],
+        "translation_models": ["Helsinki-NLP/opus-mt-jap-en", "Helsinki-NLP/opus-mt-en-jap"],
         "default_direction": translation_direction,
         "audio_config": {
             "sample_rate": FS,
