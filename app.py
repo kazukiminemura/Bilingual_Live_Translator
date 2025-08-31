@@ -48,12 +48,12 @@ class BilingualLiveTranslator:
         print("🔄 Loading translation models...")
         self.translators = {
             ("en", "ja"): pipeline(
-                "translation",
+                "translation_en_to_ja",
                 model="Helsinki-NLP/opus-mt-en-ja",
                 device=-1  # Use CPU
             ),
             ("ja", "en"): pipeline(
-                "translation",
+                "translation_ja_to_en",
                 model="Helsinki-NLP/opus-mt-ja-en",
                 device=-1  # Use CPU
             ),
