@@ -49,12 +49,12 @@ class BilingualLiveTranslator:
         self.translators = {
             ("en", "ja"): pipeline(
                 "translation",
-                model="Helsinki-NLP/opus-mt-en-jap",
+                model="Helsinki-NLP/opus-mt-en-ja",
                 device=-1  # Use CPU
             ),
             ("ja", "en"): pipeline(
                 "translation",
-                model="Helsinki-NLP/opus-mt-jap-en",
+                model="Helsinki-NLP/opus-mt-ja-en",
                 device=-1  # Use CPU
             ),
         }
