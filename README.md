@@ -1,110 +1,51 @@
 # Bilingual Live Translator
 
-This prototype demonstrates a simple bilingual speech translator that uses
-OpenAI's Whisper model for speech recognition and lightweight translation models
-from the Helsinki-NLP project via `transformers`. It follows the features
-described in the [requirement definition](Requirment_Definition.md).
+Bilingual Live Translator captures spoken English or Japanese, converts it to text with OpenAI's Whisper model, and immediately translates the result using lightweight Hugging Face models. The project exposes a simple command line interface and a minimal FastAPI web application for experimenting with real‑time translation.
 
-## Features
-- Speech-to-text using OpenAI's Whisper model.
-- English ⇄ Japanese translation with local Helsinki-NLP models (via
-  `transformers`).
-- Color coded console output (blue/green for original text, magenta/cyan for translation).
+## Requirements
 
-## Prerequisites
-These steps ensure your microphone and audio libraries are properly configured.
+* Python 3.10+
+* `ffmpeg` for audio handling
+* A microphone for live input
+* A GPU is recommended for translation (the default device is GPU 0)
 
-- **Install PulseAudio Volume Control** to confirm that your microphone is detected:
+Install the Python dependencies:
 
-  ```bash
-  sudo apt-get install pavucontrol
-  ```
-
-- **Install PortAudio libraries** required by the `sounddevice` Python package:
-
-  ```bash
-  sudo apt-get install -y libportaudio2 libportaudiocpp0 portaudio19-dev
-  ```
-
-- **Install the Python `sounddevice` module** and verify available audio devices:
-
-  ```bash
-  pip install sounddevice
-
-  python - <<'PY'
-  import sounddevice as sd
-  print(sd.query_devices())
-  print("Default input device:", sd.default.device)
-  PY
-  ```
-
-If any of these commands fail, check your network configuration or proxy settings.
-
-## Usage
-Install dependencies (requires internet access):
 ```bash
 pip install -r requirements.txt
 ```
 
-The `requirements.txt` file pins a CPU-only build of PyTorch. This avoids
-errors such as `Unable to load any of libcudnn...` when CUDA libraries are not
-available on the system.
+## Quick start
 
-Translate text:
+Translate a short piece of text:
+
 ```bash
 python app.py --text "Hello" --source en --target ja
 ```
 
-Transcribe and translate an English audio file:
-```bash
-python app.py --audio path/to/audio.wav --source en --target ja
-# Windows paths using backslashes also work
-# python app.py --audio .\\sample_english_audio.wav --source en --target ja
-```
-
-Record from the microphone and translate to English (speak Japanese):
-```bash
-python app.py --mic --duration 5
-```
-
-Both commands print the original and translated text with colors for easy distinction.
-
-## FastAPI server
-A minimal web API built with FastAPI is provided in `fastapi_app.py`.
-
-Start the server:
+Transcribe and translate an audio file:
 
 ```bash
-uvicorn fastapi_app:app --reload
+python app.py --audio path/to/audio.wav --source ja --target en
 ```
 
-Translate an audio file by sending a multipart request:
+Record from the microphone for five seconds and translate to Japanese:
 
 ```bash
-curl -F "file=@sample_english_audio.wav" -F "source=en" -F "target=ja" \
-  http://localhost:8000/translate/audio
+python app.py --mic --duration 5 --source en --target ja
 ```
 
-Translate plain text with JSON:
+## Web application
+
+The `app.py` module also contains a FastAPI application with a WebSocket endpoint. Start the server with:
 
 ```bash
-curl -X POST http://localhost:8000/translate/text \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Hello","source":"en","target":"ja"}'
+uvicorn app:app --reload
 ```
 
-## Real-time word-by-word translation (experimental)
-An experimental helper class is provided for streaming translation from the
-microphone.  It splits incoming audio into short chunks, obtains
-word-level timestamps from Whisper and translates each word immediately.
+Open `http://localhost:8000` in a browser and speak into the microphone to see the detected text and translation appear in real time.
 
-```bash
-python - <<'PY'
-from realtime_translator import RealTimeWordTranslator
-rt = RealTimeWordTranslator()
-rt.stream_from_mic()
-PY
-```
+## License
 
-Speak English or Japanese into the microphone and the console will emit the
-recognized word alongside its translation.
+MIT
+
