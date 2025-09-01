@@ -371,8 +371,12 @@
     <div class="container" style="grid-template-columns: 1fr;">
         <div class="main-panel">
             <h1>🎤 音声翻訳アプリ</h1>
-            
-            <div class="controls">
+
+            <div style="text-align: center; margin-bottom: 10px;">
+                <button id="controlToggle" onclick="toggleControls()" style="background: linear-gradient(45deg, #10b981, #059669);">設定を隠す</button>
+            </div>
+
+            <div class="controls" id="controlSection">
                 <div class="control-group">
                     <label for="direction">翻訳方向</label>
                     <select id="direction">
@@ -472,6 +476,7 @@
             totalProcessed: 0
         };
         let statsVisible = false;
+        let controlsVisible = true;
         let downloadPending = false;
         let reconnectAttempts = 0;
         const maxReconnectAttempts = 5;
@@ -746,6 +751,18 @@
             }
 
             document.getElementById('totalProcessed').textContent = performanceData.totalProcessed;
+        }
+
+        function toggleControls() {
+            controlsVisible = !controlsVisible;
+            const controlsDiv = document.getElementById('controlSection');
+            const button = document.getElementById('controlToggle');
+            controlsDiv.style.display = controlsVisible ? 'flex' : 'none';
+            button.textContent = controlsVisible ? '設定を隠す' : '設定を表示';
+            button.style.background = controlsVisible ?
+                'linear-gradient(45deg, #10b981, #059669)' :
+                'linear-gradient(45deg, #6b7280, #4b5563)';
+            addDebugEntry('設定変更', `設定パネル: ${controlsVisible ? '表示' : '非表示'}`);
         }
 
         function togglePerformanceStats() {
