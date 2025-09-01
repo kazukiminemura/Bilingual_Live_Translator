@@ -143,6 +143,10 @@ def record_audio_to_file() -> tuple[str, float]:
 
     # Broadcast current audio level to all clients scaled to 0-500 range
     level = (peak / 32768.0)
+    
+    # Display level value using log_debug
+    log_debug("Audio level calculated", {"level": level, "peak": peak, "rms": rms})
+    
     broadcast("audio_level", {"level": level})
 
     log_debug(
@@ -153,6 +157,7 @@ def record_audio_to_file() -> tuple[str, float]:
             "rms_amplitude": rms,
             "recording_time": f"{recording_time:.2f}s",
             "audio_shape": audio.shape,
+            "audio_level": level,  # levelもログに追加
         },
     )
 
