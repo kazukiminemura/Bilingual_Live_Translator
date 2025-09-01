@@ -141,8 +141,8 @@ def record_audio_to_file() -> tuple[str, float]:
     peak = float(np.max(np.abs(audio)))
     rms = float(np.sqrt(np.mean(audio**2)))
 
-    # Broadcast current audio level to all clients (normalized 0-1)
-    level = peak / 32768.0
+    # Broadcast current audio level to all clients scaled to 0-500 range
+    level = (peak / 32768.0) * 500.0
     broadcast("audio_level", {"level": level})
 
     log_debug(
