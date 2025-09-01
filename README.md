@@ -45,6 +45,18 @@ uvicorn app:app --reload
 
 Open `http://localhost:8000` in a browser and speak into the microphone to see the detected text and translation appear in real time.
 
+## Backend selection
+
+The speech recognizer and translation models can run on different hardware backends.
+Set the environment variables below to choose the device:
+
+```bash
+export ASR_BACKEND=cpu            # or gpu, npu
+export TRANSLATION_BACKEND=gpu    # or cpu, npu
+```
+
+You can also change these backends at runtime from the web interface.
+
 ## License
 
 MIT

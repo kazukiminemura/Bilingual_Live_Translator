@@ -410,6 +410,24 @@
                 </div>
 
                 <div class="control-group">
+                    <label for="asrBackend">音声認識</label>
+                    <select id="asrBackend">
+                        <option value="cpu">CPU</option>
+                        <option value="gpu">GPU</option>
+                        <option value="npu">NPU</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="translationBackend">翻訳</label>
+                    <select id="translationBackend">
+                        <option value="cpu">CPU</option>
+                        <option value="gpu">GPU</option>
+                        <option value="npu">NPU</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
                     <label for="debugToggle">デバッグモード</label>
                     <button id="debugToggle" onclick="toggleDebug()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
                 </div>
@@ -524,6 +542,12 @@
                             10
                         )
                     });
+                    sendEvent('set_asr_backend', {
+                        backend: document.getElementById('asrBackend').value
+                    });
+                    sendEvent('set_translation_backend', {
+                        backend: document.getElementById('translationBackend').value
+                    });
                 });
 
                 socket.addEventListener('close', function (event) {
@@ -563,6 +587,12 @@
                                 document.getElementById('status').textContent = '🟢 接続済み - 音声認識開始';
                                 document.getElementById('status').className = 'status';
                                 addDebugEntry('システム', 'サーバーの準備が完了しました');
+                                if (data.asr_backend) {
+                                    document.getElementById('asrBackend').value = data.asr_backend;
+                                }
+                                if (data.translation_backend) {
+                                    document.getElementById('translationBackend').value = data.translation_backend;
+                                }
                                 break;
                             case 'debug_info':
                                 if (debugEnabled) {
@@ -585,6 +615,14 @@
                                 break;
                             case 'audio_level':
                                 updateAudioLevel(data.level);
+                                break;
+                            case 'asr_backend_changed':
+                                document.getElementById('asrBackend').value = data.backend;
+                                addDebugEntry('設定変更', `音声認識バックエンド: ${data.backend}`);
+                                break;
+                            case 'translation_backend_changed':
+                                document.getElementById('translationBackend').value = data.backend;
+                                addDebugEntry('設定変更', `翻訳バックエンド: ${data.backend}`);
                                 break;
                         }
                     } catch (e) {
@@ -628,6 +666,18 @@
             }
             sendEvent('set_silence_threshold', { threshold: threshold });
             addDebugEntry('設定変更', `無音しきい値を ${threshold} に変更`);
+        });
+
+        document.getElementById('asrBackend').addEventListener('change', function() {
+            const backend = this.value;
+            sendEvent('set_asr_backend', { backend: backend });
+            addDebugEntry('設定変更', `音声認識バックエンドを ${backend} に変更`);
+        });
+
+        document.getElementById('translationBackend').addEventListener('change', function() {
+            const backend = this.value;
+            sendEvent('set_translation_backend', { backend: backend });
+            addDebugEntry('設定変更', `翻訳バックエンドを ${backend} に変更`);
         });
 
         function displaySubtitle(original, translated) {

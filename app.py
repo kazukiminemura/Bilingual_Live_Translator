@@ -24,6 +24,7 @@ import logging
 import numpy as np
 import sounddevice as sd
 import whisper
+import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -50,41 +51,69 @@ templates = Jinja2Templates(directory="templates")
 # available.
 connections: Set[WebSocket] = set()
 
-# Model loading with error handling
-try:
-    model = whisper.load_model("medium")
-    logger.info("Whisper model loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load Whisper model: {e}")
-    model = None
+def get_whisper_device(backend: str) -> str:
+    """Map backend string to whisper device string."""
+    backend = backend.lower()
+    if backend == "gpu" and torch.cuda.is_available():
+        return "cuda"
+    if backend == "npu":
+        if hasattr(torch, "xpu") and torch.xpu.is_available():
+            return "xpu"
+    return "cpu"
 
-# Translation models with better error handling and device detection
-translator_ja_en: Optional[pipeline] = None
-translator_en_ja: Optional[pipeline] = None
 
-try:
-    # Auto-detect device (use CPU if GPU not available)
-    device = 0 if os.environ.get("CUDA_VISIBLE_DEVICES") != "-1" else -1
-    
-    translator_ja_en = pipeline(
-        task="translation",
-        model="facebook/m2m100_418M",
-        tokenizer="facebook/m2m100_418M",
-        device=device,             # cuda:0
-        src_lang="ja",
-        tgt_lang="en"
-    )
-    translator_en_ja = pipeline(
-        task="translation",
-        model="facebook/m2m100_418M",
-        tokenizer="facebook/m2m100_418M",
-        device=device,
-        src_lang="en",
-        tgt_lang="ja"
-    )
-    logger.info(f"Translation models loaded on device: {device}")
-except Exception as e:
-    logger.error(f"Failed to load translation models: {e}")
+def get_pipeline_device(backend: str):
+    """Map backend string to device for HF pipeline."""
+    backend = backend.lower()
+    if backend == "gpu" and torch.cuda.is_available():
+        return 0
+    if backend == "npu" and hasattr(torch, "xpu") and torch.xpu.is_available():
+        return torch.device("xpu")
+    return -1
+
+
+def load_whisper_model(backend: str):
+    device = get_whisper_device(backend)
+    try:
+        m = whisper.load_model("medium", device=device)
+        logger.info(f"Whisper model loaded on {device}")
+        return m
+    except Exception as e:
+        logger.error(f"Failed to load Whisper model on {device}: {e}")
+        return None
+
+
+def load_translation_models(backend: str):
+    device = get_pipeline_device(backend)
+    try:
+        ja_en = pipeline(
+            task="translation",
+            model="facebook/m2m100_418M",
+            tokenizer="facebook/m2m100_418M",
+            device=device,
+            src_lang="ja",
+            tgt_lang="en",
+        )
+        en_ja = pipeline(
+            task="translation",
+            model="facebook/m2m100_418M",
+            tokenizer="facebook/m2m100_418M",
+            device=device,
+            src_lang="en",
+            tgt_lang="ja",
+        )
+        logger.info(f"Translation models loaded on {device}")
+        return ja_en, en_ja
+    except Exception as e:
+        logger.error(f"Failed to load translation models on {device}: {e}")
+        return None, None
+
+
+asr_backend = os.environ.get("ASR_BACKEND", "gpu")
+translation_backend = os.environ.get("TRANSLATION_BACKEND", "gpu")
+
+model = load_whisper_model(asr_backend)
+translator_ja_en, translator_en_ja = load_translation_models(translation_backend)
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +442,10 @@ async def health_check() -> Dict[str, str]:
             "whisper": model is not None,
             "translator_ja_en": translator_ja_en is not None,
             "translator_en_ja": translator_en_ja is not None,
+        },
+        "backends": {
+            "asr": asr_backend,
+            "translation": translation_backend,
         }
     }
 
@@ -422,6 +455,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     """Handle websocket connections from the client."""
     # global宣言を関数の最初に移動
     global translation_direction, silence_threshold, DEBUG_MODE
+    global asr_backend, translation_backend, model, translator_ja_en, translator_en_ja
     
     await ws.accept()
     connections.add(ws)
@@ -438,6 +472,8 @@ async def websocket_endpoint(ws: WebSocket) -> None:
             "translation_direction": translation_direction,
             "silence_threshold": silence_threshold,
             "debug_mode": DEBUG_MODE,
+            "asr_backend": asr_backend,
+            "translation_backend": translation_backend,
         }
     })
 
@@ -483,9 +519,25 @@ async def websocket_endpoint(ws: WebSocket) -> None:
 
             elif event == "get_debug_history":
                 await ws.send_json({
-                    "event": "debug_history", 
+                    "event": "debug_history",
                     "data": {"history": debug_history}
                 })
+
+            elif event == "set_asr_backend":
+                backend = data.get("backend")
+                if backend in ("cpu", "gpu", "npu"):
+                    asr_backend = backend
+                    model = load_whisper_model(asr_backend)
+                    log_debug("ASR backend changed", {"backend": asr_backend})
+                    await broadcast_async("asr_backend_changed", {"backend": asr_backend})
+
+            elif event == "set_translation_backend":
+                backend = data.get("backend")
+                if backend in ("cpu", "gpu", "npu"):
+                    translation_backend = backend
+                    translator_ja_en, translator_en_ja = load_translation_models(translation_backend)
+                    log_debug("Translation backend changed", {"backend": translation_backend})
+                    await broadcast_async("translation_backend_changed", {"backend": translation_backend})
 
             elif event == "ping":
                 await ws.send_json({"event": "pong", "data": {"timestamp": time.time()}})
