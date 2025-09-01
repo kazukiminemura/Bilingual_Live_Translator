@@ -436,6 +436,18 @@
                     document.getElementById('connectionIndicator').className = 'connection-indicator';
                     addDebugEntry('システム', 'WebSocket接続が確立されました');
                     reconnectAttempts = 0;
+
+                    // Sync initial settings with backend
+                    sendEvent('toggle_debug', { enabled: debugEnabled });
+                    sendEvent('set_direction', {
+                        direction: document.getElementById('direction').value
+                    });
+                    sendEvent('set_silence_threshold', {
+                        threshold: parseInt(
+                            document.getElementById('silenceThreshold').value,
+                            10
+                        )
+                    });
                 });
 
                 socket.addEventListener('close', function (event) {
@@ -567,8 +579,8 @@
             return div.innerHTML;
         }
 
-        function addDebugEntry(message, detail, data, timestamp) {
-            if (!debugEnabled) return;
+        function addDebugEntry(message, detail, data, timestamp, force = false) {
+            if (!debugEnabled && !force) return;
             
             const debugLog = document.getElementById('debugLog');
             const entry = document.createElement('div');
@@ -675,7 +687,7 @@
             const button = document.getElementById('debugToggle');
             const debugPanel = document.querySelector('.debug-panel');
             const container = document.querySelector('.container');
-            
+
             button.textContent = debugEnabled ? 'ON' : 'OFF';
             button.style.background = debugEnabled ?
                 'linear-gradient(45deg, #10b981, #059669)' :
@@ -685,7 +697,7 @@
             container.style.gridTemplateColumns = debugEnabled ? '1fr 400px' : '1fr';
 
             sendEvent('toggle_debug', { enabled: debugEnabled });
-            addDebugEntry('設定変更', `デバッグモード: ${debugEnabled ? 'ON' : 'OFF'}`);
+            addDebugEntry('設定変更', `デバッグモード: ${debugEnabled ? 'ON' : 'OFF'}`, null, null, true);
         }
 
         function clearDebugLog() {
