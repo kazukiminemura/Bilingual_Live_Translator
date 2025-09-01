@@ -55,7 +55,7 @@
             align-items: center;
             gap: 15px;
             margin-bottom: 10px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
         }
 
         .controls-header label {
@@ -69,7 +69,7 @@
             justify-content: center;
             gap: 15px;
             margin-bottom: 30px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
         }
         
         .control-group {
@@ -358,17 +358,20 @@
             }
             
             .controls {
-                flex-direction: column;
+                flex-direction: row;
+                flex-wrap: nowrap;
                 gap: 10px;
+                overflow-x: auto;
             }
-            
+
             .control-group {
-                width: 100%;
+                flex: 0 0 auto;
+                width: auto;
             }
-            
+
             select, button, input[type="number"] {
-                width: 100%;
-                max-width: 300px;
+                width: auto;
+                max-width: none;
             }
         }
         
