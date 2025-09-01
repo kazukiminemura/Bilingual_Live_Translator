@@ -41,17 +41,14 @@ templates = Jinja2Templates(directory="templates")
 # available.
 connections: Set[WebSocket] = set()
 
-# Load Whisper model and translation pipelines.  Translation is executed on
-# CPU so that the application also works on machines without a GPU.
+# Load Whisper model and translation pipelines.
 model = whisper.load_model("medium")
-# Translation pipelines run on CPU to make the application portable across
-# environments without a GPU.  The English→Japanese model name was corrected
-# as well.
+# Translation models execute on GPU 0 by default for faster performance.
 translator_ja_en = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-ja-en", device=0
 )
 translator_en_ja = pipeline(
-    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=-1
+    "translation", model="Helsinki-NLP/opus-mt-en-jap", device=0
 )
 
 
