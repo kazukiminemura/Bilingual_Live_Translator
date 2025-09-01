@@ -391,9 +391,8 @@
             <h1 id="appTitle">🎤 音声翻訳アプリ</h1>
 
             <div class="controls-header">
-                <label for="perfToggle">統計表示</label>
-                <button id="perfToggle" onclick="togglePerformanceStats()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
-                <button id="controlToggle" onclick="toggleControls()" style="background: linear-gradient(45deg, #10b981, #059669);">設定を隠す</button>
+                <label for="controlToggle">設定を隠す</label>
+                <button id="controlToggle" onclick="toggleControls()" style="background: linear-gradient(45deg, #10b981, #059669);">OFF</button>
             </div>
 
             <div class="controls" id="controlSection">
@@ -413,6 +412,11 @@
                 <div class="control-group">
                     <label for="debugToggle">デバッグモード</label>
                     <button id="debugToggle" onclick="toggleDebug()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
+                </div>
+
+                <div class="control-group">
+                    <label for="perfToggle">統計表示</label>
+                    <button id="perfToggle" onclick="togglePerformanceStats()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
                 </div>
             </div>
             
