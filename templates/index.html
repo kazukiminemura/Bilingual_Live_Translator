@@ -431,7 +431,7 @@
                 socket = new WebSocket(wsUrl);
                 
                 socket.addEventListener('open', function () {
-                    document.getElementById('status').textContent = '🟢 接続済み - 音声認識開始';
+                    document.getElementById('status').textContent = '🟡 接続済み - サーバー準備待ち';
                     document.getElementById('status').className = 'status';
                     document.getElementById('connectionIndicator').className = 'connection-indicator';
                     addDebugEntry('システム', 'WebSocket接続が確立されました');
@@ -482,6 +482,11 @@
                                     updatePerformanceStats(data.debug);
                                     addDebugEntry('翻訳結果', `原文: "${data.original}" → 翻訳: "${data.translated}"`, data.debug);
                                 }
+                                break;
+                            case 'app_ready':
+                                document.getElementById('status').textContent = '🟢 接続済み - 音声認識開始';
+                                document.getElementById('status').className = 'status';
+                                addDebugEntry('システム', 'サーバーの準備が完了しました');
                                 break;
                             case 'debug_info':
                                 if (debugEnabled) {

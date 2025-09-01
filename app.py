@@ -247,6 +247,36 @@ def recognize_and_translate() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Lifecycle events
+# ---------------------------------------------------------------------------
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Initialize background threads when the application starts."""
+
+    log_debug(
+        "Application starting",
+        {
+            "whisper_model": "medium",
+            "translation_models": [
+                "Helsinki-NLP/opus-mt-ja-en",
+                "Helsinki-NLP/opus-mt-en-jap",
+            ],
+            "default_direction": translation_direction,
+            "audio_config": {
+                "sample_rate": FS,
+                "channels": CHANNELS,
+                "record_duration": RECORD_SECONDS,
+            },
+        },
+    )
+
+    threading.Thread(target=record_audio_loop, daemon=True).start()
+    threading.Thread(target=recognize_and_translate, daemon=True).start()
+
+
+# ---------------------------------------------------------------------------
 # Web routes and websocket handling
 # ---------------------------------------------------------------------------
 
@@ -268,6 +298,9 @@ async def websocket_endpoint(ws: WebSocket) -> None:
     # Send recent debug history to the new client
     for entry in debug_history[-10:]:
         await ws.send_json({"event": "debug_info", "data": entry})
+
+    # Notify client that the application is ready
+    await ws.send_json({"event": "app_ready"})
 
     try:
         while True:
@@ -314,23 +347,6 @@ async def websocket_endpoint(ws: WebSocket) -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    log_debug(
-        "Application starting",
-        {
-            "whisper_model": "medium",
-            "translation_models": [
-                "Helsinki-NLP/opus-mt-ja-en",
-                "Helsinki-NLP/opus-mt-en-jap",
-            ],
-            "default_direction": translation_direction,
-            "audio_config": {"sample_rate": FS, "channels": CHANNELS, "record_duration": RECORD_SECONDS},
-        },
-    )
-
-    # Start background threads for recording and processing
-    threading.Thread(target=record_audio_loop, daemon=True).start()
-    threading.Thread(target=recognize_and_translate, daemon=True).start()
-
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
