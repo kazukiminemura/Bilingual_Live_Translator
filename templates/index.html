@@ -131,6 +131,25 @@
             box-shadow: 0 4px 15px rgba(237, 137, 54, 0.3);
         }
 
+        .audio-level-container {
+            margin: 15px 0;
+        }
+
+        .audio-level-bar {
+            width: 100%;
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .audio-level-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(45deg, #63b3ed, #3182ce);
+            transition: width 0.1s linear;
+        }
+
         .subtitle-wrapper {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -381,7 +400,13 @@
             <div class="status" id="status">
                 接続中...
             </div>
-            
+
+            <div class="audio-level-container">
+                <div class="audio-level-bar">
+                    <div class="audio-level-fill" id="audioLevel"></div>
+                </div>
+            </div>
+
             <div class="performance-stats" id="performanceStats" style="display: none;">
                 <h3>📊 パフォーマンス統計</h3>
                 <div class="stats-grid">
@@ -534,6 +559,9 @@
                                     downloadDebugData(data.history);
                                 }
                                 break;
+                            case 'audio_level':
+                                updateAudioLevel(data.level);
+                                break;
                         }
                     } catch (e) {
                         addDebugEntry('エラー', 'メッセージの解析に失敗しました', { error: e.message });
@@ -652,6 +680,13 @@
             
             // Scroll to bottom
             debugLog.scrollTop = debugLog.scrollHeight;
+        }
+
+        function updateAudioLevel(level) {
+            const bar = document.getElementById('audioLevel');
+            if (!bar) return;
+            const percent = Math.min(Math.max(level, 0), 1) * 100;
+            bar.style.width = percent + '%';
         }
 
         function updatePerformanceStats(debugData) {
