@@ -709,8 +709,7 @@
         function updateAudioLevel(level) {
             const bar = document.getElementById('audioLevel');
             if (!bar) return;
-            const maxLevel = 400; // 200 を 50% とする
-            const percent = Math.min(Math.max(level, 0), maxLevel) / (maxLevel / 100);
+            const percent = Math.min(Math.max(level, 0), 1) * 100;
             bar.style.width = percent + '%';
         }
 
