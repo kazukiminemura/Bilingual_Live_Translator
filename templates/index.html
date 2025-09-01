@@ -368,7 +368,7 @@
 <body>
     <div class="connection-indicator" id="connectionIndicator"></div>
     
-    <div class="container">
+    <div class="container" style="grid-template-columns: 1fr;">
         <div class="main-panel">
             <h1>🎤 音声翻訳アプリ</h1>
             
@@ -388,12 +388,12 @@
 
                 <div class="control-group">
                     <label for="debugToggle">デバッグモード</label>
-                    <button id="debugToggle" onclick="toggleDebug()">ON</button>
+                    <button id="debugToggle" onclick="toggleDebug()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
                 </div>
 
                 <div class="control-group">
                     <label for="perfToggle">統計表示</label>
-                    <button id="perfToggle" onclick="togglePerformanceStats()">OFF</button>
+                    <button id="perfToggle" onclick="togglePerformanceStats()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
                 </div>
             </div>
             
@@ -445,7 +445,7 @@
             </div>
         </div>
         
-        <div class="debug-panel">
+        <div class="debug-panel" style="display: none;">
             <div class="debug-header">
                 <div class="debug-title">🐛 デバッグログ</div>
                 <div class="debug-controls">
@@ -464,7 +464,7 @@
 
     <script>
         let socket = null;
-        let debugEnabled = true;
+        let debugEnabled = false;
         let performanceData = {
             transcriptionTimes: [],
             translationTimes: [],
