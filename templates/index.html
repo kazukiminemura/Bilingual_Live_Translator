@@ -48,7 +48,22 @@
             font-size: 2.5em;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
+        .controls-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .controls-header label {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: bold;
+        }
+
         .controls {
             display: flex;
             justify-content: center;
@@ -370,9 +385,11 @@
     
     <div class="container" style="grid-template-columns: 1fr;">
         <div class="main-panel">
-            <h1>🎤 音声翻訳アプリ</h1>
+            <h1 id="appTitle">🎤 音声翻訳アプリ</h1>
 
-            <div style="text-align: center; margin-bottom: 10px;">
+            <div class="controls-header">
+                <label for="perfToggle">統計表示</label>
+                <button id="perfToggle" onclick="togglePerformanceStats()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
                 <button id="controlToggle" onclick="toggleControls()" style="background: linear-gradient(45deg, #10b981, #059669);">設定を隠す</button>
             </div>
 
@@ -393,11 +410,6 @@
                 <div class="control-group">
                     <label for="debugToggle">デバッグモード</label>
                     <button id="debugToggle" onclick="toggleDebug()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
-                </div>
-
-                <div class="control-group">
-                    <label for="perfToggle">統計表示</label>
-                    <button id="perfToggle" onclick="togglePerformanceStats()" style="background: linear-gradient(45deg, #6b7280, #4b5563);">OFF</button>
                 </div>
             </div>
             
@@ -757,7 +769,11 @@
             controlsVisible = !controlsVisible;
             const controlsDiv = document.getElementById('controlSection');
             const button = document.getElementById('controlToggle');
+            const title = document.getElementById('appTitle');
+            const status = document.getElementById('status');
             controlsDiv.style.display = controlsVisible ? 'flex' : 'none';
+            title.style.display = controlsVisible ? 'block' : 'none';
+            status.style.display = controlsVisible ? 'block' : 'none';
             button.textContent = controlsVisible ? '設定を隠す' : '設定を表示';
             button.style.background = controlsVisible ?
                 'linear-gradient(45deg, #10b981, #059669)' :
