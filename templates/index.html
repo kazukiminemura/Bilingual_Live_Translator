@@ -685,7 +685,7 @@
         function updateAudioLevel(level) {
             const bar = document.getElementById('audioLevel');
             if (!bar) return;
-            const percent = Math.min(Math.max(level, 0), 1) * 100;
+            const percent = Math.min(Math.max(level, 0), 500) / 5;
             bar.style.width = percent + '%';
         }
 
