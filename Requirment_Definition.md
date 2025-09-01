@@ -58,7 +58,7 @@
 
 ## 5. 技術要件
 - **音声認識**：OpenAI Whisper / Google Speech-to-Text / Azure Speech SDK。  
-- **翻訳**：OpenAI GPT-4o / DeepL API / Google Translate API。  
+- **翻訳**：OpenAI GPT-4o / Helsinki-NLP公開モデル / Google Translate API。
 - **フロントエンド**：Electron（PC向け）または Flutter（クロスプラットフォーム）。  
 - **バックエンド**：Python (FastAPI, Flask) または Node.js。  
 - **表示更新**：WebSocketによるリアルタイム更新。  
