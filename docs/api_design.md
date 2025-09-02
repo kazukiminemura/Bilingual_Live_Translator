@@ -1,5 +1,7 @@
 # REST API 設計
 
+翻訳処理には Hugging Face の `facebook/m2m100_418M` を使用する。
+
 ## 共通エラーレスポンス形式
 ```json
 {

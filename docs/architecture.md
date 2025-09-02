@@ -6,7 +6,7 @@
 - フロントエンド: シンプルなHTML（フレームワークなし）
 - バックエンド: FastAPI + WebSocket
 - インフラ: Docker
-- その他: faster-whisper + Helsinki-NLP翻訳モデル
+- その他: faster-whisper + facebook/m2m100_418M翻訳モデル
 
 ## システム構成図
 ```mermaid
@@ -15,7 +15,7 @@ graph LR
     B -- audio stream --> C(FastAPI)
     C --> D[faster-whisper]
     D --> C
-    C --> E[Helsinki-NLP翻訳モデル]
+    C --> E[facebook/m2m100_418M]
     E --> C
     C -- subtitle via WebSocket --> B
 ```
@@ -26,4 +26,4 @@ graph LR
 - WebSocket: 認識～翻訳～表示までのリアルタイム性を確保するための双方向通信
 - Docker: 開発とデモ実行時に同一環境を構築し、運用を簡素化する
 - faster-whisper: CPUでも動作するオープンソースSTTで、無料かつ高精度
-- Helsinki-NLP翻訳モデル: 公開されているオープンソース翻訳モデルを利用することで、費用をかけずに要件を満たせる
+- facebook/m2m100_418M: 多言語対応のオープンソース翻訳モデルで、英日相互翻訳を高品質に実現できる
