@@ -1,6 +1,6 @@
 # Bilingual Live Translator
 
-Bilingual Live Translator captures spoken English or Japanese, converts it to text with OpenAI's Whisper model, and immediately translates the result using lightweight Hugging Face models. The project exposes a simple command line interface and a minimal FastAPI web application for experimenting with real‑time translation.
+Bilingual Live Translator captures spoken English or Japanese, converts it to text with OpenAI's Whisper model, and immediately translates the result using the `facebook/m2m100_418M` multilingual model from Hugging Face. The project exposes a simple command line interface and a minimal FastAPI web application for experimenting with real‑time translation.
 
 ## Requirements
 
